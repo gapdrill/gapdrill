@@ -25,7 +25,9 @@ golden file with `go test ./internal/report -update` and review the diff.
    works, need a short design doc in `docs/design/` (copy the structure of
    `0001-architecture.md`).
 2. Keep pull requests focused, with tests. CI runs the unit tests, the linter
-   and the end-to-end drills.
+   and the end-to-end drills. Every change, including the maintainers', reaches
+   `main` through a pull request, which can merge once the `ci-ok`, `e2e-ok`
+   and `DCO` checks pass.
 3. Sign off every commit (see below).
 
 ## Developer Certificate of Origin

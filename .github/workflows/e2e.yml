@@ -35,3 +35,19 @@ jobs:
       - name: Remove anything a failed run left behind
         if: always()
         run: go run ./cmd/gapdrill cleanup
+
+  # The one check from this workflow that branch protection requires (see the
+  # ci-ok job in ci.yml).
+  e2e-ok:
+    if: always()
+    needs: [demo]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || exit 1
+          done

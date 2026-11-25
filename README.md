@@ -187,9 +187,9 @@ kubeconfig or firewall. The full design is in
 | `operations[].settle` | How long after the operation ends its evidence is still collected (default `5s`). |
 
 Unknown fields are errors, so typos fail loudly. Check a file with
-`gapdrill validate`. Offline, an image pull that fails keeps failing, so a
-CronJob's Job fails 20 seconds after its pod can't pull an image rather than
-at its timeout. [Design doc 0002](docs/design/0002-zero-config-drills.md)
+`gapdrill validate`. Offline, an image pull that fails keeps failing, so an
+install, or a CronJob's Job, stops 20 seconds after a pod can't pull an image
+rather than at its timeout. [Design doc 0002](docs/design/0002-zero-config-drills.md)
 covers drills without a drill file.
 
 ## Exit codes

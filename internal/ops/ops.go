@@ -95,9 +95,25 @@ func HelmInstallArgs(env Env, timeout time.Duration) []string {
 }
 
 func helmInstall(ctx context.Context, env Env, timeout time.Duration) Result {
+	// Helm waits out its whole --timeout for a pod whose image can't be
+	// pulled, although offline it never will be. Stop it sooner.
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	stuck := make(chan string, 1)
+	if env.Clientset != nil {
+		go watchPulls(ctx, env, stuck, stop)
+	}
 	// Helm enforces its own --timeout; the extra minute only guards against
 	// Helm itself hanging.
-	return runTool(ctx, timeout+time.Minute, env.Dir, nil, env.HelmBin, HelmInstallArgs(env, timeout)...)
+	res := runTool(ctx, timeout+time.Minute, env.Dir, nil, env.HelmBin, HelmInstallArgs(env, timeout)...)
+	if res.Err != nil {
+		select {
+		case image := <-stuck:
+			res.Err = fmt.Errorf("install stopped: %s can't be pulled, and offline a failed pull never recovers", image)
+		default:
+		}
+	}
+	return res
 }
 
 func helmTest(ctx context.Context, env Env, timeout time.Duration) Result {
@@ -170,7 +186,7 @@ func runCronJob(ctx context.Context, env Env, op *spec.RunCronJobOp, timeout tim
 	out := fmt.Sprintf("job.batch/%s created from cronjob/%s\n", created.Name, cj.Name)
 
 	var last *batchv1.Job
-	var stuckSince time.Time
+	var watch pullWatch
 	var stuckImage string
 	err = wait.PollUntilContextTimeout(ctx, time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		j, err := jobs.Get(ctx, created.Name, metav1.GetOptions{})
@@ -181,15 +197,14 @@ func runCronJob(ctx context.Context, env Env, op *spec.RunCronJobOp, timeout tim
 		if condition(j, batchv1.JobComplete) != nil || condition(j, batchv1.JobFailed) != nil {
 			return true, nil
 		}
-		if image := jobPullFailure(ctx, env, j); image != "" {
-			if stuckSince.IsZero() {
-				stuckSince = time.Now()
-			}
-			stuckImage = image
-			return time.Since(stuckSince) >= pullGrace, nil
+		pods, err := env.Clientset.CoreV1().Pods(j.Namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: batchv1.JobNameLabel + "=" + j.Name,
+		})
+		if err != nil {
+			return false, nil
 		}
-		stuckSince = time.Time{}
-		return false, nil
+		stuckImage = watch.update(pods.Items, time.Now())
+		return stuckImage != "", nil
 	})
 	if err != nil {
 		return Result{Output: out, Err: fmt.Errorf("job %s didn't finish within %s", created.Name, timeout)}
@@ -203,41 +218,99 @@ func runCronJob(ctx context.Context, env Env, op *spec.RunCronJobOp, timeout tim
 	return Result{Output: out + fmt.Sprintf("job.batch/%s completed\n", created.Name)}
 }
 
-// pullGrace is how long a Job's pod may fail to pull an image before the
-// operation fails. Offline, a pull that fails keeps failing, so waiting out
-// the whole timeout only slows the drill down.
+// pullGrace is how long a container may fail to pull its image before the
+// operation waiting for it fails. Offline, a pull that fails keeps failing,
+// so waiting out the whole timeout only slows the drill down.
 const pullGrace = 20 * time.Second
 
-// jobPullFailure returns an image one of the Job's pods can't pull, or "".
-func jobPullFailure(ctx context.Context, env Env, j *batchv1.Job) string {
-	pods, err := env.Clientset.CoreV1().Pods(j.Namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: batchv1.JobNameLabel + "=" + j.Name,
-	})
-	if err != nil {
-		return ""
-	}
-	for i := range pods.Items {
-		if image := pullFailure(&pods.Items[i]); image != "" {
-			return image
-		}
-	}
-	return ""
+// pullWatch remembers since when each container has been failing to pull its
+// image.
+type pullWatch struct {
+	since map[string]time.Time
 }
 
-// pullFailure returns the image a pod's container is waiting for because it
-// can't be pulled, or "".
-func pullFailure(p *corev1.Pod) string {
-	for _, statuses := range [][]corev1.ContainerStatus{p.Status.InitContainerStatuses, p.Status.ContainerStatuses} {
-		for _, s := range statuses {
-			if w := s.State.Waiting; w != nil {
-				switch w.Reason {
-				case "ErrImagePull", "ImagePullBackOff", "InvalidImageName":
-					return s.Image
+// update records the pods' state at now and returns an image some container
+// has failed to pull for at least pullGrace, or "". A container whose pull
+// recovers starts over.
+func (w *pullWatch) update(pods []corev1.Pod, now time.Time) string {
+	if w.since == nil {
+		w.since = map[string]time.Time{}
+	}
+	failing := map[string]bool{}
+	stuck := ""
+	for i := range pods {
+		p := &pods[i]
+		for _, statuses := range [][]corev1.ContainerStatus{p.Status.InitContainerStatuses, p.Status.ContainerStatuses} {
+			for _, s := range statuses {
+				if !pullFailing(s) {
+					continue
+				}
+				key := p.Namespace + "/" + p.Name + "/" + s.Name
+				failing[key] = true
+				first, ok := w.since[key]
+				if !ok {
+					first = now
+					w.since[key] = now
+				}
+				if stuck == "" && now.Sub(first) >= pullGrace {
+					stuck = s.Image
 				}
 			}
 		}
 	}
-	return ""
+	for key := range w.since {
+		if !failing[key] {
+			delete(w.since, key)
+		}
+	}
+	return stuck
+}
+
+// pullFailing reports whether a container is waiting because its image can't
+// be pulled.
+func pullFailing(s corev1.ContainerStatus) bool {
+	if w := s.State.Waiting; w != nil {
+		switch w.Reason {
+		case "ErrImagePull", "ImagePullBackOff", "InvalidImageName":
+			return true
+		}
+	}
+	return false
+}
+
+// watchPulls stops an install, by calling stop, once a pod outside the
+// system namespaces has failed to pull an image for pullGrace. It sends the
+// image on stuck first, and returns when ctx ends.
+func watchPulls(ctx context.Context, env Env, stuck chan<- string, stop context.CancelFunc) {
+	skip := make(map[string]bool, len(env.SkipNamespaces))
+	for _, ns := range env.SkipNamespaces {
+		skip[ns] = true
+	}
+	var watch pullWatch
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		list, err := env.Clientset.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			continue
+		}
+		pods := list.Items[:0]
+		for _, p := range list.Items {
+			if !skip[p.Namespace] {
+				pods = append(pods, p)
+			}
+		}
+		if image := watch.update(pods, time.Now()); image != "" {
+			stuck <- image
+			stop()
+			return
+		}
+	}
 }
 
 // JobFromCronJob builds the Job that `kubectl create job --from=cronjob/NAME`

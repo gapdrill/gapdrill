@@ -21,13 +21,15 @@ changes the drill or report formats or how isolation works.
 | 4 | [Learn mode](#4-learn-mode-write-the-bundle-from-what-ran) | Explain and fix | M | Next up |
 | 5 | [Upgrade and rollback drills](#5-upgrade-and-rollback-drills) | Prove | M | Proposed |
 | 6 | [Restricted networks](#6-restricted-networks-proxies-and-allow-lists) | Prove | M | Proposed |
-| 7 | [Egress inventory](#7-egress-inventory) | Show | S | Proposed |
+| 7 | [Egress inventory](#7-egress-inventory) | Show | S | Shipped in v0.1 |
 | 8 | [Check Artifact Hub image lists](#8-check-artifact-hub-image-lists) | Show | S | Proposed |
 | 9 | [Fix hints](#9-fix-hints) | Explain and fix | S–M | Proposed |
 | 10 | [Readiness badge](#10-readiness-badge) | Show | S | Proposed |
 | 11 | [Drills in an existing cluster](#11-drills-in-an-existing-cluster) | Prove | L | Research |
 | 12 | [Fail fast during install](#12-fail-fast-during-install) | Prove | S–M | Shipped in v0.1 |
 | 13 | [Unused bundle images](#13-unused-bundle-images) | Explain and fix | S | Shipped in v0.1 |
+| 14 | [Registry override drills](#14-registry-override-drills) | Prove | M | Proposed |
+| 15 | [Signature policies offline](#15-signature-policies-offline) | Prove | L | Proposed |
 
 "Next up" marks the ideas that matter most for adoption: they remove setup,
 put gapdrill in every pull request and produce public evidence.
@@ -142,6 +144,10 @@ a standard format.
 
 **Effort.** S. Drills already record the lookups.
 
+**Status.** Shipped in v0.1 as `egress.cdx.json`. Each host is a service
+marked as crossing a trust boundary, with a `dns:` endpoint (RFC 4501), since
+a lookup is what the drill observes.
+
 ## 8. Check Artifact Hub image lists
 
 **Problem.** Artifact Hub takes a chart's image list from a dry-run install
@@ -229,3 +235,37 @@ report should say "not pulled during this drill", not "unused".
 **Status.** Shipped in v0.1. Each bundle image's digest in the bundle registry
 is recorded when it's copied in, so a pull by digest counts for an image the
 bundle lists by tag.
+
+## 14. Registry override drills
+
+**Problem.** Some sites can't configure containerd mirrors, because of managed
+nodes or strict change control. They install charts with a registry override
+such as `global.imageRegistry` pointing at their own registry instead. Charts
+often miss images in that templating: hard-coded test images, hook images, or
+images an operator picks at runtime keep naming the public registry.
+
+**Idea.** A drill mode with no mirror configuration, where only the site
+registry's name resolves and every image must be referenced through it. Any
+pod that still names a public registry fails, and the report names the
+workload and the image.
+
+**What's new.** Proof that a chart's registry override covers every image,
+including the ones created at runtime.
+
+**Effort.** M.
+
+## 15. Signature policies offline
+
+**Problem.** Sites that enforce signed images, for example with Sigstore's
+policy-controller or Kyverno, need signatures, attestations and trust roots
+that work without internet access. Verification that needs a transparency log
+or a key server online fails there, and pods are rejected.
+
+**Idea.** Run the site's admission policy in the drill, with the bundle's
+signatures in the bundle registry, and report the pods the policy rejected and
+why.
+
+**What's new.** Signature enforcement tested under the same offline
+conditions as everything else.
+
+**Effort.** L.

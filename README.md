@@ -162,7 +162,9 @@ and `report`, the path to `report.json`.
    registry requests.
 5. **Report.** Ties each finding to the operation it happened in and to its
    owner (a CronJob, a Helm hook), lists the bundle images nothing pulled (so
-   you can trim the bundle), and writes `report.md` and `report.json`.
+   you can trim the bundle), and writes `report.md` and `report.json`. It
+   also writes `egress.cdx.json`: every outside host each workload tried to
+   reach, as a CycloneDX BOM that security tooling can read.
 
 There's no root needed on the host, and gapdrill never touches your
 kubeconfig or firewall. The full design is in

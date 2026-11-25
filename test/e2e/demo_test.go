@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gapdrill/gapdrill/internal/report"
@@ -44,14 +45,14 @@ func TestMain(m *testing.M) {
 var demoDir = filepath.Join("..", "..", "examples", "demo")
 
 // drill runs a demo drill file and returns its report and exit code.
-func drill(t *testing.T, file string) (*report.Report, int) {
+func drill(t *testing.T, file string) (*report.Report, int, string) {
 	t.Helper()
 	return gapdrill(t, "-f", filepath.Join(demoDir, file))
 }
 
-// gapdrill runs `gapdrill run` with args and returns its report and exit
-// code.
-func gapdrill(t *testing.T, args ...string) (*report.Report, int) {
+// gapdrill runs `gapdrill run` with args and returns its report, exit code
+// and report directory.
+func gapdrill(t *testing.T, args ...string) (*report.Report, int, string) {
 	t.Helper()
 	dir := t.TempDir()
 	cmd := exec.Command(bin, append([]string{"run", "--verbose", "--report-dir", dir}, args...)...)
@@ -72,7 +73,7 @@ func gapdrill(t *testing.T, args ...string) (*report.Report, int) {
 	if err := json.Unmarshal(b, &r); err != nil {
 		t.Fatalf("parse report.json: %v", err)
 	}
-	return &r, code
+	return &r, code, dir
 }
 
 func operation(t *testing.T, r *report.Report, name string) report.Operation {
@@ -96,7 +97,7 @@ func hasFinding(op report.Operation, kind report.FindingKind, match func(report.
 }
 
 func TestDemoDrillCatchesBothOfflineBugs(t *testing.T) {
-	r, code := drill(t, "gapdrill.yaml")
+	r, code, dir := drill(t, "gapdrill.yaml")
 	if code != 1 {
 		t.Fatalf("exit code %d, want 1 (operations failed); verdict %s %s", code, r.Verdict, r.Error)
 	}
@@ -122,12 +123,17 @@ func TestDemoDrillCatchesBothOfflineBugs(t *testing.T) {
 	if len(r.Bundle.NotPulled) != 0 {
 		t.Errorf("the release uses every bundle image, but these are listed as not pulled: %v", r.Bundle.NotPulled)
 	}
+
+	bom, err := os.ReadFile(filepath.Join(dir, "egress.cdx.json"))
+	if err != nil || !strings.Contains(string(bom), `"dns:pypi.org"`) || !strings.Contains(string(bom), "demo-post-install") {
+		t.Errorf("the egress inventory should list pypi.org, looked up by the hook (%v):\n%s", err, bom)
+	}
 }
 
 // With no drill file, gapdrill must find the CronJob itself. The extra
 // bundle image is one nothing uses, which the report must list.
 func TestZeroConfigDrillFindsTheCronJobItself(t *testing.T) {
-	r, code := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"),
+	r, code, _ := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"),
 		"--image", "docker.io/library/alpine:3.20.3", "--name", "demo")
 	if code != 1 {
 		t.Fatalf("exit code %d, want 1 (operations failed); verdict %s %s", code, r.Verdict, r.Error)
@@ -159,7 +165,7 @@ func TestZeroConfigDrillFindsTheCronJobItself(t *testing.T) {
 // An install whose Deployment needs an image missing from the bundle must stop
 // soon after the pull fails, not after Helm's five-minute timeout.
 func TestInstallStopsOnAnImageItCantPull(t *testing.T) {
-	r, code := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"),
+	r, code, _ := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"),
 		"--name", "demo", "--set", "image=docker.io/library/busybox:9.9.9")
 	if code != 1 {
 		t.Fatalf("exit code %d, want 1 (operations failed); verdict %s %s", code, r.Verdict, r.Error)
@@ -180,7 +186,7 @@ func TestInstallStopsOnAnImageItCantPull(t *testing.T) {
 }
 
 func TestFixedDemoDrillPasses(t *testing.T) {
-	r, code := drill(t, "gapdrill-fixed.yaml")
+	r, code, _ := drill(t, "gapdrill-fixed.yaml")
 	if code != 0 || r.Verdict != report.Passed {
 		t.Fatalf("exit code %d, verdict %s; want 0 and passed: %+v", code, r.Verdict, r.Operations)
 	}

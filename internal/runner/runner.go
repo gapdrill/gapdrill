@@ -290,6 +290,20 @@ func (r *run) writeReport(rep *report.Report) ([]string, error) {
 	if err := os.WriteFile(jsPath, js, 0o644); err != nil {
 		return nil, err
 	}
+	paths := []string{mdPath, jsPath}
+	// A drill that couldn't run observed nothing, and an empty inventory would
+	// wrongly say the release contacts nothing.
+	if rep.Verdict != report.Errored {
+		bom, err := rep.EgressBOM("urn:uuid:" + uuidV4())
+		if err != nil {
+			return nil, err
+		}
+		bomPath := filepath.Join(r.o.ReportDir, "egress.cdx.json")
+		if err := os.WriteFile(bomPath, bom, 0o644); err != nil {
+			return nil, err
+		}
+		paths = append(paths, bomPath)
+	}
 	if summary := os.Getenv("GITHUB_STEP_SUMMARY"); summary != "" {
 		f, err := os.OpenFile(summary, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err == nil {
@@ -303,7 +317,7 @@ func (r *run) writeReport(rep *report.Report) ([]string, error) {
 			r.p.warnf("couldn't append to GITHUB_STEP_SUMMARY: %v", err)
 		}
 	}
-	return []string{mdPath, jsPath}, nil
+	return paths, nil
 }
 
 // teardown removes everything the run created, unless --keep.
@@ -339,6 +353,15 @@ func randomID() string {
 	b := make([]byte, 3)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// uuidV4 returns a random RFC 9562 version 4 UUID.
+func uuidV4() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func plural(n int) string {

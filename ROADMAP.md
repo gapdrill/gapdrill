@@ -15,6 +15,7 @@ that aren't scheduled yet are in [docs/ideas.md](docs/ideas.md).
   ([design](docs/design/0002-zero-config-drills.md)).
 - Reports in Markdown and JSON, with findings attributed to operations and
   owners.
+- Reports list the bundle images nothing pulled, so bundles can be trimmed.
 - A demo that fails on two realistic offline bugs and passes once they're
   fixed.
 - Release binaries for Linux and macOS, signed, with SBOMs.

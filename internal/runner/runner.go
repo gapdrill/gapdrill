@@ -87,6 +87,10 @@ type run struct {
 	iso           report.Isolation
 	runs          []report.OperationRun
 	searchDomains []string
+	// bundleDigests maps each bundle image to its digest in the bundle
+	// registry; pulled lists the references nodes pulled from it.
+	bundleDigests map[string]string
+	pulled        []string
 }
 
 // Run runs a drill and returns the process exit code.
@@ -260,6 +264,8 @@ func (r *run) buildReport(harnessErr error) *report.Report {
 		Operations:    r.runs,
 		SearchDomains: r.searchDomains,
 		HarnessError:  harnessErr,
+		Pulled:        r.pulled,
+		BundleDigests: r.bundleDigests,
 	}
 	if r.obs != nil {
 		in.Evidence = r.attributedEvidence()

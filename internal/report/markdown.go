@@ -53,6 +53,15 @@ func (r *Report) Markdown() string {
 		writeFindings(&b, r.Unattributed)
 	}
 
+	if len(r.Bundle.NotPulled) > 0 {
+		p("## Bundle images not pulled\n\n")
+		p("No node pulled these images during the drill. Operations this drill didn't run may need them; if nothing does, the bundle can do without them.\n\n")
+		for _, img := range r.Bundle.NotPulled {
+			p("- `%s`\n", img)
+		}
+		p("\n")
+	}
+
 	p("## How the cluster was isolated\n\n")
 	p("- Nodes and pods could reach only the cluster and the bundle registry (iptables and ip6tables rules inside each node).\n")
 	p("- Names outside the cluster got NXDOMAIN from CoreDNS.\n")

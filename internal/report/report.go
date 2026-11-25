@@ -66,6 +66,9 @@ type Environment struct {
 // Bundle lists the images the offline site had.
 type Bundle struct {
 	Images []string `json:"images"`
+	// NotPulled lists the bundle images no node pulled during the drill.
+	// Operations the drill didn't run may still need them.
+	NotPulled []string `json:"notPulled,omitempty"`
 }
 
 // Isolation records how the cluster was cut off and whether that was

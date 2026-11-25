@@ -72,11 +72,14 @@ func (r *run) prepareBundle(ctx context.Context) error {
 	}
 	r.registry = reg
 	arch := strings.TrimPrefix(r.env.Platform, "linux/")
+	r.bundleDigests = make(map[string]string, len(r.images))
 	for _, img := range r.images {
 		r.p.detail("copying %s", img)
-		if err := reg.Copy(ctx, img, arch); err != nil {
+		digest, err := reg.Copy(ctx, img, arch)
+		if err != nil {
 			return err
 		}
+		r.bundleDigests[img.String()] = digest
 	}
 	return nil
 }
@@ -267,9 +270,16 @@ func (r *run) collect() {
 	defer cancel()
 	if r.obs != nil && r.registry != nil {
 		if logs, err := r.registry.Logs(ctx, r.docker); err == nil {
+			since := r.isolatedAt.Add(-time.Second).Truncate(time.Second)
 			for _, req := range registry.ParseAccessLog(logs) {
-				if req.Status == 404 && req.FromContainerd() && !req.Time.Before(r.isolatedAt.Add(-time.Second).Truncate(time.Second)) {
+				if !req.FromContainerd() || req.Time.Before(since) {
+					continue
+				}
+				switch {
+				case req.Status == 404:
 					r.obs.Add(evidence.Item{Kind: evidence.ManifestNotFound, Time: req.Time, Image: req.UpstreamReference(r.registries())})
+				case req.Status >= 200 && req.Status < 300:
+					r.pulled = append(r.pulled, req.UpstreamReference(r.registries()))
 				}
 			}
 		} else {

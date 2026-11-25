@@ -119,11 +119,16 @@ func TestDemoDrillCatchesBothOfflineBugs(t *testing.T) {
 	if tests := operation(t, r, "chart-tests"); tests.Status != report.StatusPassed {
 		t.Errorf("chart-tests should pass: %+v", tests)
 	}
+	if len(r.Bundle.NotPulled) != 0 {
+		t.Errorf("the release uses every bundle image, but these are listed as not pulled: %v", r.Bundle.NotPulled)
+	}
 }
 
-// With no drill file, gapdrill must find the CronJob itself.
+// With no drill file, gapdrill must find the CronJob itself. The extra
+// bundle image is one nothing uses, which the report must list.
 func TestZeroConfigDrillFindsTheCronJobItself(t *testing.T) {
-	r, code := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"), "--name", "demo")
+	r, code := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"),
+		"--image", "docker.io/library/alpine:3.20.3", "--name", "demo")
 	if code != 1 {
 		t.Fatalf("exit code %d, want 1 (operations failed); verdict %s %s", code, r.Verdict, r.Error)
 	}
@@ -145,6 +150,9 @@ func TestZeroConfigDrillFindsTheCronJobItself(t *testing.T) {
 
 	if tests := operation(t, r, "chart-tests"); tests.Status != report.StatusPassed {
 		t.Errorf("chart-tests should pass: %+v", tests)
+	}
+	if got := r.Bundle.NotPulled; len(got) != 1 || got[0] != "docker.io/library/alpine:3.20.3" {
+		t.Errorf("only the unused alpine image should be listed as not pulled, got %v", got)
 	}
 }
 

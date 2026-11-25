@@ -106,6 +106,13 @@ func (p *progress) summary(w io.Writer, r *report.Report, paths []string) {
 		}
 		fmt.Fprintf(&b, "  %-*s  %s\n", width, op.Name, why)
 	}
+	switch n := len(r.Bundle.NotPulled); n {
+	case 0:
+	case 1:
+		fmt.Fprintf(&b, "\n1 bundle image wasn't pulled during the drill; the report lists it.\n")
+	default:
+		fmt.Fprintf(&b, "\n%d bundle images weren't pulled during the drill; the report lists them.\n", n)
+	}
 	if len(paths) > 0 {
 		fmt.Fprintf(&b, "\nReport: %s\n", strings.Join(paths, ", "))
 	}

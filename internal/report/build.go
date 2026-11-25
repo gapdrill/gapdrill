@@ -39,6 +39,12 @@ type Input struct {
 	SearchDomains []string
 	// HarnessError is set when the drill itself couldn't run.
 	HarnessError error
+	// Pulled lists the image references nodes pulled from the bundle
+	// registry during the drill.
+	Pulled []string
+	// BundleDigests maps bundle images to their digests in the bundle
+	// registry, so a pull by digest matches an image listed by tag.
+	BundleDigests map[string]string
 }
 
 // clockSlack allows for small differences between the host's clock, which
@@ -106,6 +112,11 @@ func Build(in Input) *Report {
 	}
 	sortFindings(r.Unattributed)
 
+	// Without operations that ran, every image would look unused.
+	if in.HarnessError == nil && r.RanCount() > 0 {
+		r.Bundle.NotPulled = notPulled(in.Bundle, in.BundleDigests, in.Pulled)
+	}
+
 	switch {
 	case in.HarnessError != nil:
 		r.Verdict, r.Error = Errored, in.HarnessError.Error()
@@ -115,6 +126,42 @@ func Build(in Input) *Report {
 		r.Verdict = Passed
 	}
 	return r
+}
+
+// notPulled returns the bundle images no node pulled. An image counts as
+// pulled when a pull named its repository with its tag, its digest, or the
+// digest it has in the bundle registry.
+func notPulled(bundle []string, digests map[string]string, pulled []string) []string {
+	type key struct{ repo, ref string }
+	seen := map[key]bool{}
+	for _, p := range pulled {
+		img, err := mirror.Parse(p)
+		if err != nil {
+			continue
+		}
+		repo := img.Registry + "/" + img.Repository
+		if img.Tag != "" {
+			seen[key{repo, img.Tag}] = true
+		}
+		if img.Digest != "" {
+			seen[key{repo, img.Digest}] = true
+		}
+	}
+	var out []string
+	for _, b := range bundle {
+		img, err := mirror.Parse(b)
+		if err != nil {
+			continue
+		}
+		repo := img.Registry + "/" + img.Repository
+		used := (img.Tag != "" && seen[key{repo, img.Tag}]) ||
+			(img.Digest != "" && seen[key{repo, img.Digest}]) ||
+			(digests[b] != "" && seen[key{repo, digests[b]}])
+		if !used {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // window returns the index of the operation whose window contains t, or -1.

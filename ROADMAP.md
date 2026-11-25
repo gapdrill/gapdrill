@@ -16,6 +16,7 @@ that aren't scheduled yet are in [docs/ideas.md](docs/ideas.md).
 - Reports in Markdown and JSON, with findings attributed to operations and
   owners.
 - Reports list the bundle images nothing pulled, so bundles can be trimmed.
+- Fix hints: each missing image and blocked lookup comes with the likely fix.
 - An egress inventory: the outside hosts each workload looked up, as a
   CycloneDX BOM.
 - A demo that fails on two realistic offline bugs and passes once they're

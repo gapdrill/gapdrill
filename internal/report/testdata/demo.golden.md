@@ -15,6 +15,7 @@ gapdrill v0.1.0 · kindest/node:v1.37.0 · linux/arm64 · Helm v3.22.1 · 2 bund
 Job demo-post-install (Helm post-install hook) looked up pypi.org, which doesn't resolve offline.
 
 - **Blocked lookup** `pypi.org` · Job demo-post-install (Helm post-install hook) · pod `demo/demo-post-install-x7k2p` · 6 queries
+  - **Fix:** Install Python packages when the image is built, or point pip at a package mirror inside the site (`PIP_INDEX_URL`).
 - **Container failed** `post-install` exited with code 1 · Job demo-post-install (Helm post-install hook) · pod `demo/demo-post-install-x7k2p`
 
   ```text
@@ -39,6 +40,7 @@ Error: INSTALLATION FAILED: failed post-install: 1 error occurred:
 CronJob demo-cleanup needs docker.io/library/busybox:1.37.0, which isn't in the bundle.
 
 - **Missing image** `docker.io/library/busybox:1.37.0` · CronJob demo-cleanup · pod `demo/demo-cleanup-gapdrill-1234-q9v`
+  - **Fix:** Add `docker.io/library/busybox:1.37.0` to the bundle's image list.
 
 Error: `job demo-cleanup-gapdrill-1234 didn't finish within 1m0s`
 

@@ -23,7 +23,7 @@ changes the drill or report formats or how isolation works.
 | 6 | [Restricted networks](#6-restricted-networks-proxies-and-allow-lists) | Prove | M | Proposed |
 | 7 | [Egress inventory](#7-egress-inventory) | Show | S | Shipped in v0.1 |
 | 8 | [Check Artifact Hub image lists](#8-check-artifact-hub-image-lists) | Show | S | Proposed |
-| 9 | [Fix hints](#9-fix-hints) | Explain and fix | S–M | Proposed |
+| 9 | [Fix hints](#9-fix-hints) | Explain and fix | S–M | Shipped in v0.1 |
 | 10 | [Readiness badge](#10-readiness-badge) | Show | S | Proposed |
 | 11 | [Drills in an existing cluster](#11-drills-in-an-existing-cluster) | Prove | L | Research |
 | 12 | [Fail fast during install](#12-fail-fast-during-install) | Prove | S–M | Shipped in v0.1 |
@@ -175,6 +175,10 @@ the setting that points a package manager at an internal mirror (for example
 chart.
 
 **Effort.** S to M.
+
+**Status.** Shipped in v0.1 for missing images and blocked lookups, with
+hints for package registries, release downloads, OS mirrors and container
+registries. Detecting a chart's own registry value is still to do.
 
 ## 10. Readiness badge
 

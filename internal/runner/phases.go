@@ -295,16 +295,20 @@ func (r *run) collect() {
 	if r.obs != nil && r.registry != nil {
 		if logs, err := r.registry.Logs(ctx, r.docker); err == nil {
 			since := r.isolatedAt.Add(-time.Second).Truncate(time.Second)
+			var misses []registry.Request
 			for _, req := range registry.ParseAccessLog(logs) {
 				if !req.FromContainerd() || req.Time.Before(since) {
 					continue
 				}
 				switch {
 				case req.Status == 404:
-					r.obs.Add(evidence.Item{Kind: evidence.ManifestNotFound, Time: req.Time, Image: req.UpstreamReference(r.registries())})
+					misses = append(misses, req)
 				case req.Status >= 200 && req.Status < 300:
 					r.pulled = append(r.pulled, req.UpstreamReference(r.registries()))
 				}
+			}
+			for _, req := range registry.WithoutDigestFollowUps(misses) {
+				r.obs.Add(evidence.Item{Kind: evidence.ManifestNotFound, Time: req.Time, Image: req.UpstreamReference(r.registries())})
 			}
 		} else {
 			r.p.debugf("registry logs: %v", err)

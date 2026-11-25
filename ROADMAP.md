@@ -16,10 +16,10 @@ that aren't scheduled yet are in [docs/ideas.md](docs/ideas.md).
 - A demo that fails on two realistic offline bugs and passes once they're
   fixed.
 - Release binaries for Linux and macOS, signed, with SBOMs.
+- A GitHub Action that runs a drill and publishes the report.
 
 ## v0.2: easy to adopt in CI
 
-- GitHub Action.
 - A probe pod, to verify pod egress directly as well as by rule presence.
 - Blocked connections attributed to the pods that made them.
 

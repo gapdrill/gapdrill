@@ -16,7 +16,7 @@ changes the drill or report formats or how isolation works.
 | # | Idea | Job | Effort | Status |
 |---|---|---|---|---|
 | 1 | [Zero-config drills](#1-zero-config-drills) | Prove | M | Shipped in v0.1 |
-| 2 | [Pull request gate](#2-pull-request-gate) | Show | M | Next up |
+| 2 | [Pull request gate](#2-pull-request-gate) | Show | M | In progress |
 | 3 | [Offline readiness index](#3-offline-readiness-index) | Show | M | Next up |
 | 4 | [Learn mode](#4-learn-mode-write-the-bundle-from-what-ran) | Explain and fix | M | Shipped in v0.2 |
 | 5 | [Upgrade and rollback drills](#5-upgrade-and-rollback-drills) | Prove | M | Proposed |
@@ -66,6 +66,10 @@ PR adds `busybox:1.37.0` to CronJob `cleanup`, and it isn't in the bundle."
 change is made.
 
 **Effort.** M. Needs findings with stable IDs in `report.json`.
+
+**Status.** In progress. Findings have a stable `id`, and `gapdrill compare`
+(v0.2) prints the new and fixed findings between two runs. Posting that on
+pull requests from the GitHub Action is next.
 
 ## 3. Offline readiness index
 

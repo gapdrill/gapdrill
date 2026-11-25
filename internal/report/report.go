@@ -134,6 +134,10 @@ type Finding struct {
 	Logs  []string `json:"logs,omitempty"`
 	// Fix is the likely fix, when there's a useful one to suggest.
 	Fix string `json:"fix,omitempty"`
+	// ID identifies the finding across runs (see gapdrill compare): it
+	// depends on what the finding is about and the workload behind it, not on
+	// pod names or times.
+	ID string `json:"id"`
 }
 
 // JSON renders the report as indented JSON.

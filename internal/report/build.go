@@ -99,6 +99,7 @@ func Build(in Input) *Report {
 	}
 	for _, f := range findings(in) {
 		f.Fix = fixFor(f)
+		f.ID = findingID(f)
 		if w := window(ran, f.FirstSeen); w >= 0 {
 			i := index[w]
 			r.Operations[i].Findings = append(r.Operations[i].Findings, f)

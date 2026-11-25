@@ -6,6 +6,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gapdrill/gapdrill/internal/report"
 	"github.com/gapdrill/gapdrill/internal/runner"
 	"github.com/gapdrill/gapdrill/internal/spec"
 	"github.com/gapdrill/gapdrill/internal/version"
@@ -57,7 +59,7 @@ the operations users depend on and reports which ones fail, and why.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newRun(stdout, stderr), newInit(stdout), newValidate(stdout), newCleanup(stdout), newVersion(stdout))
+	root.AddCommand(newRun(stdout, stderr), newInit(stdout), newCompare(stdout), newValidate(stdout), newCleanup(stdout), newVersion(stdout))
 	return root
 }
 
@@ -234,6 +236,60 @@ to add the operations your users depend on.`,
 	cmd.Flags().StringVarP(&out, "output", "o", "gapdrill.yaml", "file to write")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite the file if it exists")
 	return cmd
+}
+
+func newCompare(stdout io.Writer) *cobra.Command {
+	return &cobra.Command{
+		Use:   "compare BASE HEAD",
+		Short: "List the findings that are new or fixed since another run",
+		Long: `Compare the report.json files of two runs of a drill, and print the findings
+that are new in HEAD or fixed since BASE, as Markdown for a pull request
+comment. Findings match by their id, which depends on what they're about and
+the workload behind them, not on pod names or times.
+
+Exit codes: 0 nothing new; 1 new findings; 2 one of the drills couldn't run,
+so there's nothing to compare; 3 invalid input.`,
+		Example: "  gapdrill compare main-report/report.json gapdrill-report/report.json",
+		Args:    cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			base, err := readReport(args[0])
+			if err != nil {
+				return err
+			}
+			head, err := readReport(args[1])
+			if err != nil {
+				return err
+			}
+			for i, r := range []*report.Report{base, head} {
+				if r.Verdict == report.Errored {
+					fmt.Fprintf(stdout, "The drill in %s couldn't run, so there's nothing to compare: %s\n", args[i], r.Error)
+					return exitError{runner.ExitError}
+				}
+			}
+			c := report.Compare(base, head)
+			fmt.Fprint(stdout, c.Markdown(head.Drill))
+			if len(c.New) > 0 {
+				return exitError{runner.ExitFailed}
+			}
+			return nil
+		},
+	}
+}
+
+// readReport loads a report.json, refusing other report formats.
+func readReport(path string) (*report.Report, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var r report.Report
+	if err := json.Unmarshal(b, &r); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if r.SchemaVersion != report.SchemaVersion {
+		return nil, fmt.Errorf("%s: unsupported report schema %q, want %q", path, r.SchemaVersion, report.SchemaVersion)
+	}
+	return &r, nil
 }
 
 func newValidate(stdout io.Writer) *cobra.Command {

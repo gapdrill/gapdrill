@@ -27,3 +27,16 @@ gapdrill run -f gapdrill-fixed.yaml
 It adds the image to the bundle, and `values-fixed.yaml` makes the hook use
 Python's standard library instead of installing a package. Every operation
 passes.
+
+## Without a drill file
+
+gapdrill finds the CronJob and the chart's tests on its own:
+
+```sh
+gapdrill run --chart ./chart --images images.txt --name demo
+```
+
+It reports the same two bugs, with `cronjobs/demo-cleanup` as the operation
+it found. Each failure comes with the likely fix: add `busybox:1.37.0` to the
+bundle's image list, and install Python packages when the image is built or
+point pip at a package mirror inside the site.

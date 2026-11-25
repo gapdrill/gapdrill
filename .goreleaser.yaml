@@ -1,0 +1,63 @@
+# Release configuration. The release workflow runs it for every v* tag, and CI
+# builds a snapshot with it on every pull request. See docs/releasing.md.
+version: 2
+
+project_name: gapdrill
+
+builds:
+  - id: gapdrill
+    main: ./cmd/gapdrill
+    binary: gapdrill
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/gapdrill/gapdrill/internal/version.Version={{ .Tag }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: gapdrill
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+# An SPDX SBOM for each archive, made with syft.
+sboms:
+  - artifacts: archive
+
+# Sign the checksums file keylessly: the signing certificate names the release
+# workflow and tag, so there is no long-lived key to protect or leak.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --bundle=${signature}
+      - ${artifact}
+      - --yes
+    artifacts: checksum
+
+changelog:
+  use: github-native
+
+release:
+  prerelease: auto
+  footer: |
+    ## Verify this release
+
+    ```sh
+    cosign verify-blob \
+      --bundle checksums.txt.sigstore.json \
+      --certificate-identity "https://github.com/gapdrill/gapdrill/.github/workflows/release.yml@refs/tags/{{ .Tag }}" \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      checksums.txt
+    sha256sum --check --ignore-missing checksums.txt   # macOS: shasum -a 256 --check --ignore-missing checksums.txt
+    ```

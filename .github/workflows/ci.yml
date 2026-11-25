@@ -40,12 +40,42 @@ jobs:
         with:
           version: v2.15.0
 
+  # Builds the release in snapshot mode, so a broken release configuration
+  # fails here rather than on a tag. Signing needs the release workflow's
+  # identity, so it's skipped.
+  snapshot:
+    name: release snapshot
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: "1.27.x"
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: v1.57.2
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: v2.20.2
+          args: check
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: v2.20.2
+          args: release --snapshot --clean --skip=sign
+      - name: Run the snapshot binary
+        run: ./dist/gapdrill_linux_amd64_v1/gapdrill version
+
   # The one check from this workflow that branch protection requires, so
   # changing the matrix never means changing the ruleset. It runs even when a
   # job it needs fails: GitHub counts a skipped required check as passing.
   ci-ok:
     if: always()
-    needs: [test, lint]
+    needs: [test, lint, snapshot]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every job to pass

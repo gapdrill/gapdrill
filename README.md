@@ -104,6 +104,38 @@ gapdrill run            # reads ./gapdrill.yaml
 Try the demo in [examples/demo](examples/demo): one drill fails on two
 realistic bugs, and the other passes once they're fixed.
 
+## Run it in GitHub Actions
+
+```yaml
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: gapdrill/gapdrill@v0.1.0
+        with:
+          drill: gapdrill.yaml
+```
+
+The action downloads the gapdrill release it's referenced at, verifies its
+signature and checksum, runs the drill, adds the report to the job summary and
+uploads it as an artifact. The job fails when an operation fails offline. If
+you pin actions to commit SHAs, pin this one to a release commit: the action
+finds the release that commit belongs to. The runner needs Docker and Helm 3
+or 4, for example from [azure/setup-helm](https://github.com/Azure/setup-helm).
+
+| Input | Default | Meaning |
+|---|---|---|
+| `drill` | `gapdrill.yaml` | Path to the drill file |
+| `report-dir` | `gapdrill-report` | Where to write `report.md` and `report.json` |
+| `args` | | Extra arguments for `gapdrill run`, such as `--timeout 45m` |
+| `version` | the action's release | The gapdrill release to run |
+| `upload-report` | `true` | Upload the report as an artifact |
+| `artifact-name` | `gapdrill-report` | The artifact's name; change it when a job runs more than one drill |
+
+Outputs: `verdict` (`passed`, `failed`, `error` or `invalid`), `exit-code`,
+and `report`, the path to `report.json`.
+
 ## How it works
 
 1. **Prepare.** Starts a registry holding only your bundle's images, and

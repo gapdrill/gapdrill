@@ -1,0 +1,80 @@
+name: gapdrill
+description: Find out whether your Helm release works without internet access, before your offline users do.
+author: The gapdrill Authors
+branding:
+  icon: wifi-off
+  color: blue
+
+inputs:
+  drill:
+    description: Path to the drill file.
+    default: gapdrill.yaml
+  report-dir:
+    description: Directory to write report.md and report.json to.
+    default: gapdrill-report
+  args:
+    description: Extra arguments for `gapdrill run`, separated by spaces, such as `--timeout 45m`.
+    default: ""
+  version:
+    description: >-
+      The gapdrill release to run, such as v0.1.0. By default it's the release
+      this action is referenced at, by tag or by commit SHA. At a branch or a
+      local path, the action builds gapdrill from source, which needs Go.
+    default: ""
+  upload-report:
+    description: Upload the report directory as a workflow artifact.
+    default: "true"
+  artifact-name:
+    description: Name of the report artifact. Change it when a job runs more than one drill.
+    default: gapdrill-report
+
+outputs:
+  verdict:
+    description: passed, failed (an operation failed offline), error (the drill couldn't run) or invalid (bad input).
+    value: ${{ steps.run.outputs.verdict }}
+  exit-code:
+    description: The exit code of `gapdrill run`.
+    value: ${{ steps.run.outputs.exit-code }}
+  report:
+    description: Path to report.json.
+    value: ${{ steps.run.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Find the gapdrill release
+      id: resolve
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+      run: bash "$GITHUB_ACTION_PATH/action/resolve.sh"
+
+    - name: Install cosign
+      if: steps.resolve.outputs.version != ''
+      uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      with:
+        cosign-release: v3.1.4
+
+    - name: Install gapdrill
+      shell: bash
+      env:
+        VERSION: ${{ steps.resolve.outputs.version }}
+      run: bash "$GITHUB_ACTION_PATH/action/install.sh"
+
+    - name: Run the drill
+      id: run
+      shell: bash
+      env:
+        DRILL: ${{ inputs.drill }}
+        REPORT_DIR: ${{ inputs.report-dir }}
+        ARGS: ${{ inputs.args }}
+      run: bash "$GITHUB_ACTION_PATH/action/run.sh"
+
+    - name: Upload the report
+      if: always() && inputs.upload-report == 'true'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.report-dir }}
+        if-no-files-found: ignore

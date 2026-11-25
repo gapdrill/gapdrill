@@ -36,11 +36,50 @@ jobs:
         if: always()
         run: go run ./cmd/gapdrill cleanup
 
+  # Runs the GitHub Action from this checkout, the way a user's workflow
+  # would. Used from a local path, the action builds gapdrill from source.
+  action:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: "1.27.x"
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: v3.22.1
+      - name: Drill the broken demo
+        id: broken
+        uses: ./
+        continue-on-error: true
+        with:
+          drill: examples/demo/gapdrill.yaml
+          report-dir: broken-report
+          artifact-name: demo-broken-report
+      - name: Drill the fixed demo
+        id: fixed
+        uses: ./
+        with:
+          drill: examples/demo/gapdrill-fixed.yaml
+          report-dir: fixed-report
+          artifact-name: demo-fixed-report
+      - name: Check the action's outputs
+        env:
+          BROKEN: ${{ steps.broken.outputs.verdict }}
+          FIXED: ${{ steps.fixed.outputs.verdict }}
+          REPORT: ${{ steps.broken.outputs.report }}
+        run: |
+          echo "broken demo: $BROKEN, fixed demo: $FIXED"
+          [ "$BROKEN" = failed ] && [ "$FIXED" = passed ] && [ -s "$REPORT" ]
+
   # The one check from this workflow that branch protection requires (see the
   # ci-ok job in ci.yml).
   e2e-ok:
     if: always()
-    needs: [demo]
+    needs: [demo, action]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every job to pass

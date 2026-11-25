@@ -95,30 +95,37 @@ func HelmInstallArgs(env Env, timeout time.Duration) []string {
 }
 
 func helmInstall(ctx context.Context, env Env, timeout time.Duration) Result {
-	// Helm waits out its whole --timeout for a pod whose image can't be
-	// pulled, although offline it never will be. Stop it sooner.
+	return helmWatched(ctx, env, timeout, "install", HelmInstallArgs(env, timeout))
+}
+
+func helmTest(ctx context.Context, env Env, timeout time.Duration) Result {
+	return helmWatched(ctx, env, timeout, "tests", []string{
+		"test", env.Release, "--namespace", env.Namespace, "--timeout", timeout.String(), "--kubeconfig", env.Kubeconfig, "--logs",
+	})
+}
+
+// helmWatched runs Helm with args, and stops it once a pod created since it
+// started has failed to pull an image for pullGrace: Helm would wait out its
+// whole --timeout, although offline the pull never succeeds. what names the
+// step in the error, such as "install".
+func helmWatched(ctx context.Context, env Env, timeout time.Duration, what string, args []string) Result {
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	stuck := make(chan string, 1)
 	if env.Clientset != nil {
-		go watchPulls(ctx, env, stuck, stop)
+		go watchPulls(ctx, env, time.Now(), stuck, stop)
 	}
 	// Helm enforces its own --timeout; the extra minute only guards against
 	// Helm itself hanging.
-	res := runTool(ctx, timeout+time.Minute, env.Dir, nil, env.HelmBin, HelmInstallArgs(env, timeout)...)
+	res := runTool(ctx, timeout+time.Minute, env.Dir, nil, env.HelmBin, args...)
 	if res.Err != nil {
 		select {
 		case image := <-stuck:
-			res.Err = fmt.Errorf("install stopped: %s can't be pulled, and offline a failed pull never recovers", image)
+			res.Err = fmt.Errorf("%s stopped: %s can't be pulled, and offline a failed pull never recovers", what, image)
 		default:
 		}
 	}
 	return res
-}
-
-func helmTest(ctx context.Context, env Env, timeout time.Duration) Result {
-	return runTool(ctx, timeout+time.Minute, env.Dir, nil, env.HelmBin,
-		"test", env.Release, "--namespace", env.Namespace, "--timeout", timeout.String(), "--kubeconfig", env.Kubeconfig, "--logs")
 }
 
 func runTool(ctx context.Context, limit time.Duration, dir string, extraEnv []string, name string, args ...string) Result {
@@ -266,6 +273,19 @@ func (w *pullWatch) update(pods []corev1.Pod, now time.Time) string {
 	return stuck
 }
 
+// podsSince returns the pods outside skip created at or after since. Pods
+// from earlier operations are left out, so an install's stuck pod doesn't
+// stop the tests that follow. Creation times have one-second precision.
+func podsSince(pods []corev1.Pod, skip map[string]bool, since time.Time) []corev1.Pod {
+	var out []corev1.Pod
+	for _, p := range pods {
+		if !skip[p.Namespace] && !p.CreationTimestamp.Time.Before(since.Truncate(time.Second)) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // pullFailing reports whether a container is waiting because its image can't
 // be pulled.
 func pullFailing(s corev1.ContainerStatus) bool {
@@ -278,10 +298,10 @@ func pullFailing(s corev1.ContainerStatus) bool {
 	return false
 }
 
-// watchPulls stops an install, by calling stop, once a pod outside the
-// system namespaces has failed to pull an image for pullGrace. It sends the
-// image on stuck first, and returns when ctx ends.
-func watchPulls(ctx context.Context, env Env, stuck chan<- string, stop context.CancelFunc) {
+// watchPulls calls stop once a pod outside the system namespaces, created
+// since since, has failed to pull an image for pullGrace. It sends the image
+// on stuck first, and returns when ctx ends.
+func watchPulls(ctx context.Context, env Env, since time.Time, stuck chan<- string, stop context.CancelFunc) {
 	skip := make(map[string]bool, len(env.SkipNamespaces))
 	for _, ns := range env.SkipNamespaces {
 		skip[ns] = true
@@ -299,13 +319,7 @@ func watchPulls(ctx context.Context, env Env, stuck chan<- string, stop context.
 		if err != nil {
 			continue
 		}
-		pods := list.Items[:0]
-		for _, p := range list.Items {
-			if !skip[p.Namespace] {
-				pods = append(pods, p)
-			}
-		}
-		if image := watch.update(pods, time.Now()); image != "" {
+		if image := watch.update(podsSince(list.Items, skip, since), time.Now()); image != "" {
 			stuck <- image
 			stop()
 			return

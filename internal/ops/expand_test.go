@@ -5,6 +5,7 @@ package ops
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -124,6 +125,26 @@ func TestPullWatchWaitsForAStuckPull(t *testing.T) {
 		if got := w.update(pod(step.reason), t0.Add(step.at)); got != step.want {
 			t.Errorf("at %s (%s): update = %q, want %q", step.at, step.reason, got, step.want)
 		}
+	}
+}
+
+func TestPodsSinceLeavesOutEarlierAndSystemPods(t *testing.T) {
+	start := time.Date(2026, 11, 24, 10, 0, 0, 500e6, time.UTC) // mid-second
+	pod := func(ns, name string, created time.Time) corev1.Pod {
+		return corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, CreationTimestamp: metav1.NewTime(created)}}
+	}
+	pods := []corev1.Pod{
+		pod("demo", "web-from-install", start.Add(-2*time.Minute)), // an earlier operation's pod
+		pod("demo", "test-same-second", start.Truncate(time.Second)),
+		pod("demo", "test", start.Add(3*time.Second)),
+		pod("kube-system", "coredns", start.Add(3*time.Second)),
+	}
+	var names []string
+	for _, p := range podsSince(pods, map[string]bool{"kube-system": true}, start) {
+		names = append(names, p.Name)
+	}
+	if got, want := strings.Join(names, ","), "test-same-second,test"; got != want {
+		t.Errorf("podsSince = %s, want %s", got, want)
 	}
 }
 

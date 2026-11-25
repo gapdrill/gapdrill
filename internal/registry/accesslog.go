@@ -32,6 +32,34 @@ func (r Request) FromContainerd() bool { return strings.HasPrefix(r.UserAgent, "
 // Combined Log Format, as written by Distribution's access log.
 var accessRE = regexp.MustCompile(`\[([^\]]+)\] "(?:GET|HEAD) /v2/(.+)/manifests/([^ ?"]+)(?:\?([^ "]*))? HTTP/[0-9.]+" (\d{3}) \S+ "[^"]*" "([^"]*)"`)
 
+// followUpWindow bounds how long after a missed tag request containerd's
+// requests for the same image by digest are treated as part of that pull.
+const followUpWindow = 30 * time.Second
+
+// WithoutDigestFollowUps drops digest requests that follow a request by tag
+// for the same repository within followUpWindow. When a pull by tag misses
+// the bundle registry, containerd's next requests by digest miss too, and in
+// a learn run they're for the image it then fetches upstream: one missing
+// image, not three. A digest request with no tag request before it, such as a
+// pull of an image pinned by digest, is kept. reqs must be in log order.
+func WithoutDigestFollowUps(reqs []Request) []Request {
+	lastTag := map[string]time.Time{}
+	var out []Request
+	for _, r := range reqs {
+		repo := r.Namespace + "/" + r.Repository
+		if !strings.Contains(r.Reference, ":") { // tags can't contain ':'; digests do
+			lastTag[repo] = r.Time
+			out = append(out, r)
+			continue
+		}
+		if t, ok := lastTag[repo]; ok && !r.Time.Before(t) && r.Time.Sub(t) <= followUpWindow {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
 // ParseAccessLog returns the manifest requests in a registry log, skipping
 // every other line.
 func ParseAccessLog(log string) []Request {

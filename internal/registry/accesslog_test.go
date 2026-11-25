@@ -4,6 +4,7 @@
 package registry
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -41,5 +42,33 @@ func TestParseAccessLog(t *testing.T) {
 		if got := reqs[i].UpstreamReference(bundle); got != want {
 			t.Errorf("request %d: UpstreamReference = %q, want %q", i, got, want)
 		}
+	}
+}
+
+func TestWithoutDigestFollowUps(t *testing.T) {
+	t0 := time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC)
+	const (
+		index    = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+		platform = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+		pinned   = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	)
+	reqs := []Request{
+		{Time: t0, Repository: "docker.io/library/busybox", Reference: "1.37.0"},
+		{Time: t0.Add(time.Second), Repository: "docker.io/library/busybox", Reference: index},        // follow-up
+		{Time: t0.Add(2 * time.Second), Repository: "docker.io/library/busybox", Reference: platform}, // follow-up
+		{Time: t0, Repository: "quay.io/acme/agent", Reference: pinned},                               // pinned by digest: no tag before it
+		{Time: t0.Add(5 * time.Minute), Repository: "docker.io/library/busybox", Reference: pinned},   // long after: a different pull
+	}
+	var got []string
+	for _, r := range WithoutDigestFollowUps(reqs) {
+		got = append(got, r.Repository+" "+r.Reference)
+	}
+	want := []string{
+		"docker.io/library/busybox 1.37.0",
+		"quay.io/acme/agent " + pinned,
+		"docker.io/library/busybox " + pinned,
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("WithoutDigestFollowUps =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }

@@ -1,0 +1,18 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "demo.fullname" . }}-cleanup
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.cleanup.schedule | quote }}
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: cleanup
+              image: {{ .Values.cleanup.image }}
+              command: ["sh", "-c", "echo removing old files; sleep 2"]

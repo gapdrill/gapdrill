@@ -1,0 +1,15 @@
+# The web server. Its image is in the demo bundle.
+image: docker.io/library/busybox:1.36.1
+
+cleanup:
+  schedule: "0 3 * * *"
+  # Not in the demo bundle (see ../images.txt), like a helper image left out
+  # of a real release. Only the scheduled job uses it, so installing works.
+  image: docker.io/library/busybox:1.37.0
+
+postInstall:
+  image: docker.io/library/python:3.12-alpine
+  # Installs `requests` from PyPI at install time, as many real hooks do.
+  # That needs internet access an offline site doesn't have, even when every
+  # image is in the bundle.
+  installDeps: true

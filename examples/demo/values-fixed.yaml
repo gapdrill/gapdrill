@@ -1,0 +1,4 @@
+postInstall:
+  # Use Python's standard library instead of installing packages at install
+  # time, so the hook needs nothing from the internet.
+  installDeps: false

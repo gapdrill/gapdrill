@@ -1,0 +1,4 @@
+# The images the demo release ships in its offline bundle.
+# docker.io/library/busybox:1.37.0, used by the cleanup CronJob, is missing on purpose.
+docker.io/library/busybox:1.36.1
+docker.io/library/python:3.12-alpine

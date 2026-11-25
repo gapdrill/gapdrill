@@ -1,0 +1,25 @@
+# The demo drill after both fixes. Every operation passes.
+apiVersion: gapdrill/v1alpha1
+kind: Drill
+metadata:
+  name: demo-fixed
+bundle:
+  imagesFile: images.txt
+  images:
+    - docker.io/library/busybox:1.37.0 # fix 1: ship the cleanup image
+release:
+  chart: ./chart
+  name: demo
+  valuesFiles:
+    - values-fixed.yaml # fix 2: the hook stops installing packages
+operations:
+  - name: install
+    helmInstall:
+      timeout: 3m
+  - name: scheduled-cleanup
+    runCronJob:
+      name: demo-cleanup
+      timeout: 1m
+  - name: chart-tests
+    helmTest:
+      timeout: 2m

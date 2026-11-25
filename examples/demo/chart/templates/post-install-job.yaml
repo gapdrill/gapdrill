@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "demo.fullname" . }}-post-install
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: post-install
+          image: {{ .Values.postInstall.image }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              {{- if .Values.postInstall.installDeps }}
+              pip install --disable-pip-version-check --no-cache-dir requests
+              python -c 'import requests; r = requests.get("http://{{ include "demo.fullname" . }}:8080/", timeout=5); print("web answered", r.status_code)'
+              {{- else }}
+              python -c 'import urllib.request; r = urllib.request.urlopen("http://{{ include "demo.fullname" . }}:8080/", timeout=5); print("web answered", r.status)'
+              {{- end }}

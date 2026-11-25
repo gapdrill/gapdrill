@@ -1,0 +1,21 @@
+# A drill for the demo chart. It fails on purpose; see README.md.
+apiVersion: gapdrill/v1alpha1
+kind: Drill
+metadata:
+  name: demo
+bundle:
+  imagesFile: images.txt
+release:
+  chart: ./chart
+  name: demo
+operations:
+  - name: install
+    helmInstall:
+      timeout: 3m
+  - name: scheduled-cleanup
+    runCronJob:
+      name: demo-cleanup
+      timeout: 1m
+  - name: chart-tests
+    helmTest:
+      timeout: 2m

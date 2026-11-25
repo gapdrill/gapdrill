@@ -27,7 +27,7 @@ changes the drill or report formats or how isolation works.
 | 10 | [Readiness badge](#10-readiness-badge) | Show | S | Proposed |
 | 11 | [Drills in an existing cluster](#11-drills-in-an-existing-cluster) | Prove | L | Research |
 | 12 | [Fail fast during install](#12-fail-fast-during-install) | Prove | S–M | Proposed |
-| 13 | [Unused bundle images](#13-unused-bundle-images) | Explain and fix | S | Proposed |
+| 13 | [Unused bundle images](#13-unused-bundle-images) | Explain and fix | S | Shipped in v0.1 |
 
 "Next up" marks the ideas that matter most for adoption: they remove setup,
 put gapdrill in every pull request and produce public evidence.
@@ -223,3 +223,7 @@ maintainers can check them and trim the bundle.
 **Effort.** S. The registry log already records every pull. An image used
 only by an operation the drill didn't run would also look unused, so the
 report should say "not pulled during this drill", not "unused".
+
+**Status.** Shipped in v0.1. Each bundle image's digest in the bundle registry
+is recorded when it's copied in, so a pull by digest counts for an image the
+bundle lists by tag.

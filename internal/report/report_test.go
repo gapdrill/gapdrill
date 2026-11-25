@@ -50,6 +50,7 @@ func demoInput() Input {
 		Environment: Environment{NodeImage: "kindest/node:v1.37.0", Platform: "linux/arm64", Helm: "v3.22.1"},
 		Isolation:   Isolation{Verified: true, ReachableBefore: true, ProbeURL: "https://1.1.1.1", RejectedPackets: 12},
 		Bundle:      []string{"docker.io/library/busybox:1.36.1", "docker.io/library/python:3.12-alpine"},
+		Pulled:      []string{"docker.io/library/busybox:1.36.1", "docker.io/library/python:3.12-alpine"},
 		Operations: []OperationRun{
 			{Name: "install", Type: "helmInstall", Start: at(0), End: at(34), Settle: 5 * time.Second,
 				Err:    errors.New("helm failed: INSTALLATION FAILED: failed post-install: 1 error occurred: * job demo-post-install failed: BackoffLimitExceeded"),
@@ -182,6 +183,50 @@ func TestSkippedOperationsGetNoEvidence(t *testing.T) {
 	}
 	if strings.Contains(md, "## chart-tests") {
 		t.Error("a skipped operation has nothing to detail")
+	}
+}
+
+func TestNotPulled(t *testing.T) {
+	const indexDigest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	const platformDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	bundle := []string{
+		"docker.io/library/busybox:1.36.1",             // pulled by tag
+		"docker.io/library/python:3.12-alpine",         // pulled by its digest in the bundle registry
+		"quay.io/acme/agent@" + indexDigest,            // pulled by digest
+		"docker.io/library/alpine:3.20.3",              // never pulled
+		"docker.io/library/busybox:1.37.0",             // same repository, other tag: not pulled
+		"ghcr.io/acme/telemetry:2.0@" + platformDigest, // a tag and digest; pulled by digest
+	}
+	digests := map[string]string{"docker.io/library/python:3.12-alpine": platformDigest}
+	pulled := []string{
+		"busybox:1.36.1", // short forms are normalised
+		"docker.io/library/python@" + platformDigest,
+		"quay.io/acme/agent@" + indexDigest,
+		"ghcr.io/acme/telemetry@" + platformDigest,
+	}
+	got := notPulled(bundle, digests, pulled)
+	want := []string{"docker.io/library/alpine:3.20.3", "docker.io/library/busybox:1.37.0"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("notPulled = %v, want %v", got, want)
+	}
+}
+
+func TestReportListsBundleImagesNotPulled(t *testing.T) {
+	in := demoInput()
+	in.Bundle = append(in.Bundle, "docker.io/library/alpine:3.20.3")
+	r := Build(in)
+	if len(r.Bundle.NotPulled) != 1 || r.Bundle.NotPulled[0] != "docker.io/library/alpine:3.20.3" {
+		t.Fatalf("NotPulled = %v", r.Bundle.NotPulled)
+	}
+	if md := r.Markdown(); !strings.Contains(md, "## Bundle images not pulled") || !strings.Contains(md, "- `docker.io/library/alpine:3.20.3`") {
+		t.Errorf("Markdown lacks the list:\n%s", md)
+	}
+
+	// When the drill couldn't run, nothing was pulled, and saying so would
+	// be noise.
+	in.HarnessError = errors.New("isolation failed")
+	if r := Build(in); len(r.Bundle.NotPulled) != 0 {
+		t.Errorf("a drill that couldn't run must not list unpulled images: %v", r.Bundle.NotPulled)
 	}
 }
 

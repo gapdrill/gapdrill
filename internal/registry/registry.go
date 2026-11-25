@@ -99,7 +99,10 @@ func (r *Registry) waitReady(ctx context.Context, timeout time.Duration) error {
 // It uses the Docker credential chain and retries anonymously when the
 // registry rejects the credentials, since stale logins are common and public
 // bundles shouldn't fail because of them.
-func (r *Registry) Copy(ctx context.Context, img mirror.Image, arch string) error {
+//
+// It returns the image's digest in the bundle registry, so that a pull by
+// digest can be matched to a bundle image listed by tag.
+func (r *Registry) Copy(ctx context.Context, img mirror.Image, arch string) (string, error) {
 	src := img.String()
 	dst := img.MirrorReference(r.HostAddr)
 	opts := []crane.Option{crane.WithContext(ctx), crane.WithUserAgent("gapdrill")}
@@ -111,9 +114,13 @@ func (r *Registry) Copy(ctx context.Context, img mirror.Image, arch string) erro
 		err = crane.Copy(src, dst, append(opts, crane.WithAuth(authn.Anonymous))...)
 	}
 	if err != nil {
-		return fmt.Errorf("copy %s into the bundle registry: %w", src, err)
+		return "", fmt.Errorf("copy %s into the bundle registry: %w", src, err)
 	}
-	return nil
+	digest, err := crane.Digest(dst, crane.WithContext(ctx), crane.WithUserAgent("gapdrill"))
+	if err != nil {
+		return "", fmt.Errorf("read the digest of %s in the bundle registry: %w", src, err)
+	}
+	return digest, nil
 }
 
 // Logs returns the registry's log output.

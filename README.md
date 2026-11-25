@@ -1,0 +1,159 @@
+# gapdrill
+
+**Find out whether your Helm release works without internet access, before your offline users do.**
+
+gapdrill runs your chart in a local [kind](https://kind.sigs.k8s.io) cluster
+that can't reach the internet and can pull images only from your offline
+bundle. Then it runs the operations your users depend on (install, chart
+tests, scheduled jobs, your own steps) and tells you which ones fail and why.
+
+```console
+$ gapdrill run -f examples/demo/gapdrill.yaml
+gapdrill v0.1.0 · drill "demo" · 3 operations · 2 bundle images
+[1/5] Creating an isolated network
+[2/5] Copying 2 bundle images and creating the cluster
+[3/5] Cutting the cluster off the internet
+[4/5] Verifying the cluster is offline
+[5/5] Running 3 operations
+      ✗ install (22s)
+      ✗ scheduled-cleanup (1m0s)
+      ✓ chart-tests (3s)
+
+✗ Failed: 2 of 3 operations failed offline.
+  install            Job demo-post-install (Helm post-install hook) looked up pypi.org, which doesn't resolve offline.
+  scheduled-cleanup  CronJob demo-cleanup needs docker.io/library/busybox:1.37.0, which isn't in the bundle.
+  chart-tests        passed
+
+Report: gapdrill-report/report.md, gapdrill-report/report.json
+```
+
+## Why
+
+A chart can install cleanly in a disconnected cluster and still be broken
+there, in code paths a basic install never touches:
+
+- **Images pulled later.** A CronJob, or an operator, requests an image the
+  bundle doesn't ship. Air-gapped Harvester clusters hit exactly this
+  ([harvester/harvester#10007](https://github.com/harvester/harvester/issues/10007)).
+- **Network calls that aren't image pulls.** A hook runs `pip install` or
+  downloads a release asset. Every image is mirrored, and it still fails.
+- **Pull policy.** `imagePullPolicy: Always` contacts a registry even when the
+  image is already on the node.
+
+Static scanners such as `zarf dev find-images` read image references out of
+manifests, and they're worth running. They can't see images chosen at runtime,
+or calls that aren't image pulls. gapdrill runs the release for real.
+
+## Install
+
+gapdrill needs **Docker** (Docker Desktop works) and **Helm** 3 or 4. You don't
+need kind: it's built in.
+
+```sh
+go install github.com/gapdrill/gapdrill/cmd/gapdrill@latest   # Go 1.26 or later
+```
+
+Release binaries and a GitHub Action are planned for v0.2 (see [ROADMAP.md](ROADMAP.md)).
+
+## Quick start
+
+Put a drill file next to your chart:
+
+```yaml
+# gapdrill.yaml
+apiVersion: gapdrill/v1alpha1
+kind: Drill
+metadata:
+  name: my-chart
+bundle:
+  imagesFile: images.txt        # the images your offline bundle ships, one per line
+release:
+  chart: ./charts/my-chart
+  name: my-chart
+  valuesFiles: [values-airgap.yaml]
+operations:
+  - name: install
+    helmInstall: {timeout: 5m}
+  - name: nightly-cleanup
+    runCronJob: {name: my-chart-cleanup}
+  - name: chart-tests
+    helmTest: {}
+```
+
+Then run it:
+
+```sh
+gapdrill run            # reads ./gapdrill.yaml
+```
+
+Try the demo in [examples/demo](examples/demo): one drill fails on two
+realistic bugs, and the other passes once they're fixed.
+
+## How it works
+
+1. **Prepare.** Starts a registry holding only your bundle's images, and
+   creates a kind cluster beside it.
+2. **Isolate.** Points containerd at that registry for every registry name,
+   with no fallback upstream. Makes CoreDNS answer "no such host" for names
+   outside the cluster and log each query. Installs egress rules in every node.
+3. **Verify.** Fetches a probe URL from the node before and after isolation.
+   If the cluster can still reach it, the drill stops: a test that isn't
+   really offline proves nothing.
+4. **Drill.** Runs your operations in order, watching pods, DNS queries and
+   registry requests.
+5. **Report.** Ties each finding to the operation it happened in and to its
+   owner (a CronJob, a Helm hook), and writes `report.md` and `report.json`.
+
+There's no root needed on the host, and gapdrill never touches your
+kubeconfig or firewall. The full design is in
+[docs/design/0001-architecture.md](docs/design/0001-architecture.md).
+
+## Drill file reference
+
+| Field | Meaning |
+|---|---|
+| `metadata.name` | Name of the drill (a lowercase DNS label). |
+| `bundle.imagesFile` | File with one image reference per line; `#` starts a comment. Relative to the drill file. |
+| `bundle.images` | More image references, added to the file's. |
+| `cluster.nodeImage` | Override the kind node image (and so the Kubernetes version). |
+| `release.chart` | Local chart directory, or any reference Helm accepts (`oci://…`, `repo/chart`). |
+| `release.name`, `release.namespace` | Release name; the namespace defaults to the release name. |
+| `release.valuesFiles`, `release.set` | Values for the release, as with `helm --values` and `--set`. |
+| `operations[].helmInstall` | Install the release and wait (`timeout`, default `5m`). |
+| `operations[].helmTest` | Run the chart's test hooks (`timeout`, default `3m`). |
+| `operations[].runCronJob` | Start a Job from a CronJob, like `kubectl create job --from=cronjob/…`, and wait for it (`name`, `namespace`, `timeout`). |
+| `operations[].exec` | Run a command on the host, with `KUBECONFIG` set to the offline cluster (`command`, `timeout`). |
+| `operations[].settle` | How long after the operation ends its evidence is still collected (default `5s`). |
+
+Unknown fields are errors, so typos fail loudly. Check a file with
+`gapdrill validate`.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Every operation passed. |
+| 1 | An operation failed: the release has a problem. |
+| 2 | The drill couldn't run: setup, isolation or verification failed. |
+| 3 | Invalid input. |
+
+In GitHub Actions, the Markdown report is also added to the job summary.
+
+## Status
+
+gapdrill is **alpha** (v0.1). The drill and report formats are `v1alpha1` and
+may change before v1. Known gaps are listed in the
+[design doc](docs/design/0001-architecture.md#isolation-model).
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Commits
+need a [DCO](https://developercertificate.org/) sign-off (`git commit -s`).
+Using gapdrill in your release pipeline? Add yourself to
+[ADOPTERS.md](ADOPTERS.md).
+
+This project follows the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md).
+
+## License
+
+[Apache License 2.0](LICENSE).

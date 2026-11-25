@@ -1,0 +1,24 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
+    - nolintlint
+    - unconvert
+  exclusions:
+    presets:
+      # Unchecked Close, Fprint and RemoveAll on best-effort paths, as in
+      # golangci-lint v1's defaults.
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/gapdrill/gapdrill

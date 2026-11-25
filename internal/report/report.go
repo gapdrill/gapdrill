@@ -127,6 +127,8 @@ type Finding struct {
 	// of queries).
 	Count int      `json:"count"`
 	Logs  []string `json:"logs,omitempty"`
+	// Fix is the likely fix, when there's a useful one to suggest.
+	Fix string `json:"fix,omitempty"`
 }
 
 // JSON renders the report as indented JSON.

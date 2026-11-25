@@ -129,6 +129,9 @@ func writeFindings(b *strings.Builder, fs []Finding) {
 			parts = append(parts, fmt.Sprintf("%d queries", f.Count))
 		}
 		fmt.Fprintf(b, "- %s\n", strings.Join(parts, " · "))
+		if f.Fix != "" {
+			fmt.Fprintf(b, "  - **Fix:** %s\n", f.Fix)
+		}
 		if len(f.Logs) > 0 {
 			b.WriteString("\n  ```text\n")
 			for _, l := range f.Logs {

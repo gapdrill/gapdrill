@@ -173,6 +173,10 @@ func TestInstallStopsOnAnImageItCantPull(t *testing.T) {
 	if install.DurationSeconds > 90 {
 		t.Errorf("install should stop soon after the pull fails, not after %.0fs", install.DurationSeconds)
 	}
+	// The chart's test pod uses the same missing image.
+	if tests := operation(t, r, "chart-tests"); tests.Status != report.StatusFailed || tests.DurationSeconds > 90 {
+		t.Errorf("the tests should stop soon after their pod's pull fails: %s after %.0fs", tests.Status, tests.DurationSeconds)
+	}
 }
 
 func TestFixedDemoDrillPasses(t *testing.T) {

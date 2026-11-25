@@ -49,11 +49,26 @@ or calls that aren't image pulls. gapdrill runs the release for real.
 gapdrill needs **Docker** (Docker Desktop works) and **Helm** 3 or 4. You don't
 need kind: it's built in.
 
+Download a release for Linux or macOS, on amd64 or arm64:
+
 ```sh
-go install github.com/gapdrill/gapdrill/cmd/gapdrill@latest   # Go 1.26 or later
+VERSION=v0.1.0
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+curl -fsSLO "https://github.com/gapdrill/gapdrill/releases/download/${VERSION}/gapdrill_${VERSION#v}_${OS}_${ARCH}.tar.gz"
+tar -xzf "gapdrill_${VERSION#v}_${OS}_${ARCH}.tar.gz" gapdrill
+sudo install gapdrill /usr/local/bin/
 ```
 
-Release binaries and a GitHub Action are planned for v0.2 (see [ROADMAP.md](ROADMAP.md)).
+Releases are signed and include SBOMs; [docs/releasing.md](docs/releasing.md#verify-a-release)
+shows how to verify one. On macOS, download with `curl` as above: a file
+downloaded in a browser is quarantined by Gatekeeper.
+
+Or build it with Go 1.26 or later:
+
+```sh
+go install github.com/gapdrill/gapdrill/cmd/gapdrill@latest
+```
 
 ## Quick start
 

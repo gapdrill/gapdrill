@@ -1,7 +1,9 @@
 # Roadmap
 
 The design behind these milestones is in
-[docs/design/0001-architecture.md](docs/design/0001-architecture.md).
+[docs/design/0001-architecture.md](docs/design/0001-architecture.md). Where the
+project is heading, and why, is in [docs/vision.md](docs/vision.md). Ideas
+that aren't scheduled yet are in [docs/ideas.md](docs/ideas.md).
 
 ## v0.1: walking skeleton (current)
 

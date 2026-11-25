@@ -39,3 +39,20 @@ jobs:
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.15.0
+
+  # The one check from this workflow that branch protection requires, so
+  # changing the matrix never means changing the ruleset. It runs even when a
+  # job it needs fails: GitHub counts a skipped required check as passing.
+  ci-ok:
+    if: always()
+    needs: [test, lint]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || exit 1
+          done

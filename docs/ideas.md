@@ -15,7 +15,7 @@ changes the drill or report formats or how isolation works.
 
 | # | Idea | Job | Effort | Status |
 |---|---|---|---|---|
-| 1 | [Zero-config drills](#1-zero-config-drills) | Prove | M | Next up |
+| 1 | [Zero-config drills](#1-zero-config-drills) | Prove | M | Shipped in v0.1 |
 | 2 | [Pull request gate](#2-pull-request-gate) | Show | M | Next up |
 | 3 | [Offline readiness index](#3-offline-readiness-index) | Show | M | Next up |
 | 4 | [Learn mode](#4-learn-mode-write-the-bundle-from-what-ran) | Explain and fix | M | Next up |
@@ -26,6 +26,8 @@ changes the drill or report formats or how isolation works.
 | 9 | [Fix hints](#9-fix-hints) | Explain and fix | S–M | Proposed |
 | 10 | [Readiness badge](#10-readiness-badge) | Show | S | Proposed |
 | 11 | [Drills in an existing cluster](#11-drills-in-an-existing-cluster) | Prove | L | Research |
+| 12 | [Fail fast during install](#12-fail-fast-during-install) | Prove | S–M | Proposed |
+| 13 | [Unused bundle images](#13-unused-bundle-images) | Explain and fix | S | Proposed |
 
 "Next up" marks the ideas that matter most for adoption: they remove setup,
 put gapdrill in every pull request and produce public evidence.
@@ -45,6 +47,9 @@ version, it also drills the upgrade (idea 5).
 and tests are covered without anyone remembering to add them.
 
 **Effort.** M.
+
+**Status.** Shipped in v0.1, without the upgrade step: see
+[design doc 0002](design/0002-zero-config-drills.md).
 
 ## 2. Pull request gate
 
@@ -189,3 +194,32 @@ admission policy.
 
 **Effort.** L. Isolation is weaker than in a dedicated cluster (DNS, for
 example, is shared), so this needs research before a design.
+
+## 12. Fail fast during install
+
+**Problem.** When a release's Deployment needs an image that isn't in the
+bundle, `helm install --wait` waits out its whole timeout (five minutes by
+default), although offline the pull will never succeed. CronJob operations
+already fail 20 seconds after a pod can't pull an image.
+
+**Idea.** Watch the release's pods while Helm installs, and stop the install
+once one has failed to pull an image for 20 seconds, reporting the image.
+
+**What's new.** A drill takes as long as its first real failure, not its
+longest timeout.
+
+**Effort.** S to M.
+
+## 13. Unused bundle images
+
+**Problem.** Bundles grow and rarely shrink, and every unused image costs
+transfer time to sites reached over slow links or by removable media.
+
+**Idea.** List the bundle images that nothing pulled during the drill, so
+maintainers can check them and trim the bundle.
+
+**What's new.** Bundle hygiene based on what the release actually used.
+
+**Effort.** S. The registry log already records every pull. An image used
+only by an operation the drill didn't run would also look unused, so the
+report should say "not pulled during this drill", not "unused".

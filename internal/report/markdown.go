@@ -32,7 +32,7 @@ func (r *Report) Markdown() string {
 	}
 
 	for _, op := range r.Operations {
-		if op.Status == StatusPassed && len(op.Findings) == 0 {
+		if op.Status == StatusSkipped || (op.Status == StatusPassed && len(op.Findings) == 0) {
 			continue
 		}
 		p("## %s: %s\n\n", op.Name, op.Status)
@@ -75,18 +75,24 @@ func (r *Report) Markdown() string {
 }
 
 func (r *Report) headline() string {
-	n := len(r.Operations)
+	n := r.RanCount()
+	var s string
 	switch r.Verdict {
 	case Passed:
 		if n == 1 {
-			return "**✓ Passed:** the operation passed."
+			s = "**✓ Passed:** the operation passed."
+		} else {
+			s = fmt.Sprintf("**✓ Passed:** all %d operations passed.", n)
 		}
-		return fmt.Sprintf("**✓ Passed:** all %d operations passed.", n)
 	case Failed:
-		return fmt.Sprintf("**✗ Failed:** %d of %d operation%s failed.", r.FailedCount(), n, plural(n))
+		s = fmt.Sprintf("**✗ Failed:** %d of %d operation%s failed.", r.FailedCount(), n, plural(n))
 	default:
 		return "**⚠ The drill couldn't run:** " + r.Error
 	}
+	if skipped := len(r.Operations) - n; skipped > 0 {
+		s += fmt.Sprintf(" %d skipped.", skipped)
+	}
+	return s
 }
 
 // writeFindings lists the evidence compactly: what, who, where. The full
@@ -126,8 +132,11 @@ func writeFindings(b *strings.Builder, fs []Finding) {
 }
 
 func statusLabel(s Status) string {
-	if s == StatusPassed {
+	switch s {
+	case StatusPassed:
 		return "✓ passed"
+	case StatusSkipped:
+		return "– skipped"
 	}
 	return "✗ failed"
 }

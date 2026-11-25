@@ -34,6 +34,9 @@ type Status string
 const (
 	StatusPassed Status = "passed"
 	StatusFailed Status = "failed"
+	// StatusSkipped means there was nothing to run, such as tests for a chart
+	// that has none.
+	StatusSkipped Status = "skipped"
 )
 
 // Report is the result of a drill.
@@ -130,6 +133,18 @@ func (r *Report) JSON() ([]byte, error) {
 		return nil, err
 	}
 	return append(b, '\n'), nil
+}
+
+// RanCount returns the number of operations that ran, that is, weren't
+// skipped.
+func (r *Report) RanCount() int {
+	n := 0
+	for _, op := range r.Operations {
+		if op.Status != StatusSkipped {
+			n++
+		}
+	}
+	return n
 }
 
 // FailedCount returns the number of failed operations.

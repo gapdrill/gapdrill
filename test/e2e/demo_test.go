@@ -41,11 +41,20 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// drill runs a demo drill and returns its report and exit code.
+var demoDir = filepath.Join("..", "..", "examples", "demo")
+
+// drill runs a demo drill file and returns its report and exit code.
 func drill(t *testing.T, file string) (*report.Report, int) {
 	t.Helper()
+	return gapdrill(t, "-f", filepath.Join(demoDir, file))
+}
+
+// gapdrill runs `gapdrill run` with args and returns its report and exit
+// code.
+func gapdrill(t *testing.T, args ...string) (*report.Report, int) {
+	t.Helper()
 	dir := t.TempDir()
-	cmd := exec.Command(bin, "run", "--verbose", "--report-dir", dir, "-f", filepath.Join("..", "..", "examples", "demo", file))
+	cmd := exec.Command(bin, append([]string{"run", "--verbose", "--report-dir", dir}, args...)...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	code := 0
 	if err := cmd.Run(); err != nil {
@@ -105,6 +114,33 @@ func TestDemoDrillCatchesBothOfflineBugs(t *testing.T) {
 		return f.Image == "docker.io/library/busybox:1.37.0" && f.Pod != nil && f.Pod.Owner == "CronJob demo-cleanup"
 	}) {
 		t.Errorf("scheduled-cleanup should fail on the missing cleanup image: %+v", cleanup)
+	}
+
+	if tests := operation(t, r, "chart-tests"); tests.Status != report.StatusPassed {
+		t.Errorf("chart-tests should pass: %+v", tests)
+	}
+}
+
+// With no drill file, gapdrill must find the CronJob itself.
+func TestZeroConfigDrillFindsTheCronJobItself(t *testing.T) {
+	r, code := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"), "--name", "demo")
+	if code != 1 {
+		t.Fatalf("exit code %d, want 1 (operations failed); verdict %s %s", code, r.Verdict, r.Error)
+	}
+
+	install := operation(t, r, "install")
+	if install.Status != report.StatusFailed || !hasFinding(install, report.NetworkLookup, func(f report.Finding) bool { return f.Host == "pypi.org" }) {
+		t.Errorf("install should fail on the hook's lookup of pypi.org: %+v", install)
+	}
+
+	cleanup := operation(t, r, "cronjobs/demo-cleanup")
+	if cleanup.Status != report.StatusFailed || cleanup.Type != "runCronJob" || !hasFinding(cleanup, report.MissingImage, func(f report.Finding) bool {
+		return f.Image == "docker.io/library/busybox:1.37.0"
+	}) {
+		t.Errorf("the discovered CronJob should fail on its missing image: %+v", cleanup)
+	}
+	if cleanup.DurationSeconds > 60 {
+		t.Errorf("a Job that can't pull its image should fail fast, not after %.0fs", cleanup.DurationSeconds)
 	}
 
 	if tests := operation(t, r, "chart-tests"); tests.Status != report.StatusPassed {

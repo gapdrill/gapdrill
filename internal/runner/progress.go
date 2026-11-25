@@ -75,6 +75,10 @@ func (p *progress) operation(name string, err error, d time.Duration) {
 	p.printf("      %s %s (%s)\n", mark, name, d.Round(time.Second))
 }
 
+func (p *progress) skipped(name, reason string) {
+	p.printf("      – %s skipped: %s\n", name, reason)
+}
+
 func (p *progress) kept(name, kubeconfig string) {
 	p.printf("Kept cluster %s for debugging:\n  export KUBECONFIG=%s\nRemove it with: gapdrill cleanup\n", name, kubeconfig)
 }
@@ -87,7 +91,7 @@ func (p *progress) summary(w io.Writer, r *report.Report, paths []string) {
 	case report.Passed:
 		fmt.Fprintf(&b, "✓ Passed: every operation worked offline.\n")
 	case report.Failed:
-		fmt.Fprintf(&b, "✗ Failed: %d of %d operations failed offline.\n", r.FailedCount(), len(r.Operations))
+		fmt.Fprintf(&b, "✗ Failed: %d of %d operations failed offline.\n", r.FailedCount(), r.RanCount())
 	default:
 		fmt.Fprintf(&b, "⚠ The drill couldn't run: %s\n", r.Error)
 	}

@@ -29,6 +29,7 @@ import (
 	"github.com/gapdrill/gapdrill/internal/ops"
 	"github.com/gapdrill/gapdrill/internal/registry"
 	"github.com/gapdrill/gapdrill/internal/report"
+	"github.com/gapdrill/gapdrill/internal/spec"
 )
 
 // prepare starts the bundle registry and copies the bundle into it while the
@@ -207,34 +208,56 @@ func (r *run) operations(ctx context.Context) error {
 	}
 
 	env := ops.Env{
-		Kubeconfig:  r.cluster.KubeconfigPath,
-		HelmBin:     r.helmBin,
-		ChartRef:    r.drill.ChartRef(),
-		Release:     r.drill.Release.Name,
-		Namespace:   r.drill.Release.Namespace,
-		ValuesFiles: r.drill.ValuesFiles(),
-		Set:         r.drill.Release.Set,
-		Dir:         r.drill.Dir,
-		Clientset:   r.cs,
+		Kubeconfig:     r.cluster.KubeconfigPath,
+		HelmBin:        r.helmBin,
+		ChartRef:       r.drill.ChartRef(),
+		Release:        r.drill.Release.Name,
+		Namespace:      r.drill.Release.Namespace,
+		ValuesFiles:    r.drill.ValuesFiles(),
+		Set:            r.drill.Release.Set,
+		Dir:            r.drill.Dir,
+		Clientset:      r.cs,
+		SkipNamespaces: observe.SystemNamespaces,
 	}
-	for _, op := range r.drill.Operations {
-		start := time.Now()
-		res := ops.Run(ctx, env, op)
-		end := time.Now()
-		r.runs = append(r.runs, report.OperationRun{
-			Name: op.Name, Type: op.Type(), Start: start, End: end,
-			Settle: op.SettlePeriod(), Err: res.Err, Output: res.Output,
-		})
-		r.p.operation(op.Name, res.Err, end.Sub(start))
-		// Let late effects of this operation land in its window before the
-		// next one starts.
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(op.SettlePeriod()):
+	for _, declared := range r.drill.Operations {
+		// Some operations depend on what earlier ones created, such as the
+		// CronJobs an install made, so they're expanded only now.
+		expanded, skip, err := ops.Expand(ctx, env, declared)
+		switch {
+		case err != nil:
+			now := time.Now()
+			r.record(declared, now, now, ops.Result{Err: err})
+			continue
+		case skip != "":
+			now := time.Now()
+			r.runs = append(r.runs, report.OperationRun{
+				Name: declared.Name, Type: declared.Type(), Start: now, End: now, Skipped: skip,
+			})
+			r.p.skipped(declared.Name, skip)
+			continue
+		}
+		for _, op := range expanded {
+			start := time.Now()
+			res := ops.Run(ctx, env, op)
+			r.record(op, start, time.Now(), res)
+			// Let late effects of this operation land in its window before the
+			// next one starts.
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(op.SettlePeriod()):
+			}
 		}
 	}
 	return nil
+}
+
+func (r *run) record(op spec.Operation, start, end time.Time, res ops.Result) {
+	r.runs = append(r.runs, report.OperationRun{
+		Name: op.Name, Type: op.Type(), Start: start, End: end,
+		Settle: op.SettlePeriod(), Err: res.Err, Output: res.Output,
+	})
+	r.p.operation(op.Name, res.Err, end.Sub(start))
 }
 
 // collect gathers the evidence that is only available at the end, then stops

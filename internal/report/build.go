@@ -21,6 +21,8 @@ type OperationRun struct {
 	Settle     time.Duration
 	Err        error
 	Output     string
+	// Skipped is why the operation didn't run, when it didn't.
+	Skipped string
 }
 
 // Input is everything a report is built from.
@@ -66,21 +68,39 @@ func Build(in Input) *Report {
 			DurationSeconds: run.End.Sub(run.Start).Round(time.Second).Seconds(),
 			Output:          run.Output,
 		}
-		if run.Err != nil {
+		switch {
+		case run.Skipped != "":
+			op.Status = StatusSkipped
+			op.Summary = "Skipped: " + run.Skipped + "."
+		case run.Err != nil:
 			op.Status = StatusFailed
 			op.Error = run.Err.Error()
 		}
 		r.Operations = append(r.Operations, op)
 	}
 
+	// Only operations that ran have windows: nothing can be blamed on one that
+	// didn't.
+	var ran []OperationRun
+	var index []int
+	for i, run := range in.Operations {
+		if run.Skipped == "" {
+			ran = append(ran, run)
+			index = append(index, i)
+		}
+	}
 	for _, f := range findings(in) {
-		if i := window(in.Operations, f.FirstSeen); i >= 0 {
+		if w := window(ran, f.FirstSeen); w >= 0 {
+			i := index[w]
 			r.Operations[i].Findings = append(r.Operations[i].Findings, f)
 		} else {
 			r.Unattributed = append(r.Unattributed, f)
 		}
 	}
 	for i := range r.Operations {
+		if r.Operations[i].Status == StatusSkipped {
+			continue
+		}
 		sortFindings(r.Operations[i].Findings)
 		r.Operations[i].Summary = summarize(r.Operations[i])
 	}

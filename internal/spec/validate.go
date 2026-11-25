@@ -55,11 +55,11 @@ func (d *Drill) Validate() error {
 
 		switch op.typeCount() {
 		case 0:
-			add(f, "set one of helmInstall, helmTest, runCronJob or exec")
+			add(f, "set one of helmInstall, helmTest, runCronJob, runCronJobs or exec")
 			continue
 		case 1:
 		default:
-			add(f, "set only one of helmInstall, helmTest, runCronJob or exec")
+			add(f, "set only one of helmInstall, helmTest, runCronJob, runCronJobs or exec")
 			continue
 		}
 

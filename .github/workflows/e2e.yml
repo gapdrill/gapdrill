@@ -75,11 +75,34 @@ jobs:
           echo "broken demo: $BROKEN, fixed demo: $FIXED"
           [ "$BROKEN" = failed ] && [ "$FIXED" = passed ] && [ -s "$REPORT" ]
 
+  # Installs the latest release with the action's script, the way the action
+  # does when it's used at a release tag: download, verify the signature and
+  # checksum, run. The action job above only exercises builds from source.
+  action-release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+      - name: Find the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "VERSION=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)" >> "$GITHUB_ENV"
+      - name: Install it with the action's script
+        env:
+          GITHUB_ACTION_PATH: ${{ github.workspace }}
+        run: bash action/install.sh
+      - name: Check the installed version
+        run: test "$(gapdrill version)" = "$VERSION"
+
   # The one check from this workflow that branch protection requires (see the
   # ci-ok job in ci.yml).
   e2e-ok:
     if: always()
-    needs: [demo, action]
+    needs: [demo, action, action-release]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every job to pass

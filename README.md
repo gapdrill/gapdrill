@@ -145,6 +145,9 @@ gapdrill is **alpha** (v0.1). The drill and report formats are `v1alpha1` and
 may change before v1. Known gaps are listed in the
 [design doc](docs/design/0001-architecture.md#isolation-model).
 
+Where it's heading: the [vision](docs/vision.md), the [roadmap](ROADMAP.md)
+and the [ideas](docs/ideas.md) not yet scheduled.
+
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Commits

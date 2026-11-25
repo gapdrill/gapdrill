@@ -168,6 +168,7 @@ couldn't run (setup, isolation or verification failed); 3 invalid input.`,
 	f.DurationVar(&o.Timeout, "timeout", 30*time.Minute, "limit for the whole drill")
 	f.StringVar(&o.ProbeURL, "probe-url", runner.DefaultProbeURL, "URL that must be reachable before isolation and unreachable after")
 	f.BoolVarP(&o.Verbose, "verbose", "v", false, "print details of each phase")
+	f.BoolVar(&o.Learn, "learn", false, "let the nodes pull images the bundle lacks from their own registries (pods stay offline), and write every image the release pulled to images.learned.txt")
 	return cmd
 }
 

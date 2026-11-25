@@ -51,6 +51,27 @@ func TestMirrorReference(t *testing.T) {
 	}
 }
 
+func TestLearnHostsFilesFallBackUpstream(t *testing.T) {
+	files := LearnHostsFiles("172.18.0.3:5000", []string{"quay.io", "docker.io", "docker.io"})
+	if len(files) != 3 {
+		t.Fatalf("want _default plus one file per registry, got %d files", len(files))
+	}
+	for path, content := range files {
+		// Without a server line, containerd falls back to the registry being
+		// pulled from once the bundle registry has answered "not found".
+		if strings.Contains(content, "\nserver") {
+			t.Errorf("%s: a learn run must be able to fall back upstream:\n%s", path, content)
+		}
+		if !strings.Contains(content, `[host."http://172.18.0.3:5000`) {
+			t.Errorf("%s: the bundle registry must still be asked first:\n%s", path, content)
+		}
+	}
+	want := "[host.\"http://172.18.0.3:5000/v2/quay.io\"]\n  capabilities = [\"pull\", \"resolve\"]\n  override_path = true\n"
+	if !strings.HasSuffix(files["quay.io/hosts.toml"], want) {
+		t.Errorf("quay.io/hosts.toml:\n%s", files["quay.io/hosts.toml"])
+	}
+}
+
 func TestHostsFilesNeverFallBackUpstream(t *testing.T) {
 	files := HostsFiles("172.18.0.3:5000", []string{"quay.io", "docker.io", "docker.io", "localhost:5000"})
 

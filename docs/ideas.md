@@ -18,7 +18,7 @@ changes the drill or report formats or how isolation works.
 | 1 | [Zero-config drills](#1-zero-config-drills) | Prove | M | Shipped in v0.1 |
 | 2 | [Pull request gate](#2-pull-request-gate) | Show | M | Next up |
 | 3 | [Offline readiness index](#3-offline-readiness-index) | Show | M | Next up |
-| 4 | [Learn mode](#4-learn-mode-write-the-bundle-from-what-ran) | Explain and fix | M | Next up |
+| 4 | [Learn mode](#4-learn-mode-write-the-bundle-from-what-ran) | Explain and fix | M | Shipped in v0.2 |
 | 5 | [Upgrade and rollback drills](#5-upgrade-and-rollback-drills) | Prove | M | Proposed |
 | 6 | [Restricted networks](#6-restricted-networks-proxies-and-allow-lists) | Prove | M | Proposed |
 | 7 | [Egress inventory](#7-egress-inventory) | Show | S | Shipped in v0.1 |
@@ -99,6 +99,10 @@ scheduled jobs, tests, upgrade), not from rendered templates.
 **Related work.** `zarf dev find-images` finds images in rendered manifests.
 
 **Effort.** M.
+
+**Status.** Shipped in v0.2 as `gapdrill run --learn`, writing a plain image
+list: see [design doc 0003](design/0003-learn-mode.md). Zarf and Hauler
+output is still to do.
 
 ## 5. Upgrade and rollback drills
 

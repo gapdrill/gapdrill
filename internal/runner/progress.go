@@ -106,6 +106,15 @@ func (p *progress) summary(w io.Writer, r *report.Report, paths []string) {
 		}
 		fmt.Fprintf(&b, "  %-*s  %s\n", width, op.Name, why)
 	}
+	if r.Isolation.Learn && len(r.Learned) > 0 {
+		missing := 0
+		for _, img := range r.Learned {
+			if !img.InBundle {
+				missing++
+			}
+		}
+		fmt.Fprintf(&b, "\nLearn run: the release pulled %d image%s, %d of them not in the bundle; images.learned.txt lists them all.\n", len(r.Learned), plural(len(r.Learned)), missing)
+	}
 	switch n := len(r.Bundle.NotPulled); n {
 	case 0:
 	case 1:

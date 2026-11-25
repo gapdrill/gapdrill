@@ -60,6 +60,10 @@ type Options struct {
 	Timeout  time.Duration
 	ProbeURL string
 	Verbose  bool
+	// Learn lets the nodes pull images the bundle lacks from their own
+	// registries, keeping the pods offline, and lists every image the
+	// release pulled in images.learned.txt.
+	Learn bool
 	// Stdout receives the final summary; Stderr receives progress.
 	Stdout, Stderr io.Writer
 }
@@ -91,6 +95,10 @@ type run struct {
 	// registry; pulled lists the references nodes pulled from it.
 	bundleDigests map[string]string
 	pulled        []string
+	// imagesBefore lists the nodes' images before the operations, in a learn
+	// run; learned lists the ones pulled since.
+	imagesBefore []string
+	learned      []string
 }
 
 // Run runs a drill and returns the process exit code.
@@ -266,6 +274,7 @@ func (r *run) buildReport(harnessErr error) *report.Report {
 		HarnessError:  harnessErr,
 		Pulled:        r.pulled,
 		BundleDigests: r.bundleDigests,
+		LearnedPulled: r.learned,
 	}
 	if r.obs != nil {
 		in.Evidence = r.attributedEvidence()
@@ -303,6 +312,13 @@ func (r *run) writeReport(rep *report.Report) ([]string, error) {
 			return nil, err
 		}
 		paths = append(paths, bomPath)
+	}
+	if len(rep.Learned) > 0 {
+		learnedPath := filepath.Join(r.o.ReportDir, "images.learned.txt")
+		if err := os.WriteFile(learnedPath, rep.LearnedFile(), 0o644); err != nil {
+			return nil, err
+		}
+		paths = append(paths, learnedPath)
 	}
 	if summary := os.Getenv("GITHUB_STEP_SUMMARY"); summary != "" {
 		f, err := os.OpenFile(summary, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)

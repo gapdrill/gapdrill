@@ -23,6 +23,7 @@ import (
 	"github.com/gapdrill/gapdrill/internal/cluster"
 	"github.com/gapdrill/gapdrill/internal/dnsmon"
 	"github.com/gapdrill/gapdrill/internal/evidence"
+	"github.com/gapdrill/gapdrill/internal/learn"
 	"github.com/gapdrill/gapdrill/internal/lockdown"
 	"github.com/gapdrill/gapdrill/internal/mirror"
 	"github.com/gapdrill/gapdrill/internal/observe"
@@ -90,6 +91,9 @@ func (r *run) isolate(ctx context.Context) error {
 	nodes := r.cluster.Nodes()
 
 	files := mirror.HostsFiles(r.registry.NodeAddr, r.registries())
+	if r.o.Learn {
+		files = mirror.LearnHostsFiles(r.registry.NodeAddr, r.registries())
+	}
 	for _, node := range nodes {
 		for rel, content := range files {
 			if err := r.cluster.WriteFile(ctx, node, path.Join(mirror.HostsDir, rel), content); err != nil {
@@ -97,7 +101,11 @@ func (r *run) isolate(ctx context.Context) error {
 			}
 		}
 	}
-	r.p.detail("containerd on %d node%s pulls only from the bundle registry at %s", len(nodes), plural(len(nodes)), r.registry.NodeAddr)
+	if r.o.Learn {
+		r.p.detail("containerd on %d node%s asks the bundle registry at %s first, then the image's own registry", len(nodes), plural(len(nodes)), r.registry.NodeAddr)
+	} else {
+		r.p.detail("containerd on %d node%s pulls only from the bundle registry at %s", len(nodes), plural(len(nodes)), r.registry.NodeAddr)
+	}
 
 	if out, err := r.cluster.Exec(ctx, nodes[0], "cat", "/etc/resolv.conf"); err == nil {
 		r.searchDomains = searchDomains(out)
@@ -110,6 +118,7 @@ func (r *run) isolate(ctx context.Context) error {
 	network := lockdown.Network{
 		PodCIDR:     netip.MustParsePrefix(cluster.PodCIDR),
 		ServiceCIDR: netip.MustParsePrefix(cluster.ServiceCIDR),
+		NodesOnline: r.o.Learn,
 	}
 	for _, s := range subnets {
 		network.NodeSubnets = append(network.NodeSubnets, s.Prefix)
@@ -187,6 +196,13 @@ func (r *run) offlineDNS(ctx context.Context) error {
 
 // verify proves the nodes can no longer reach the probe URL.
 func (r *run) verify(ctx context.Context) error {
+	if r.o.Learn {
+		// The nodes are online on purpose, so containerd can pull what the
+		// bundle lacks. The pods' rules were checked when they were applied.
+		r.iso.Learn = true
+		r.p.detail("learn run: the nodes stay online for image pulls; the pods are cut off")
+		return nil
+	}
 	for _, node := range r.cluster.Nodes() {
 		if lockdown.Reachable(ctx, r.cluster, node, r.o.ProbeURL) {
 			return fmt.Errorf("isolation failed: %s is still reachable from node %s", r.o.ProbeURL, node)
@@ -208,6 +224,14 @@ func (r *run) operations(ctx context.Context) error {
 	}
 	if err := r.obs.FollowDNS(ctx, r.isolatedAt); err != nil {
 		return fmt.Errorf("follow CoreDNS logs: %w", err)
+	}
+
+	if r.o.Learn {
+		images, err := r.nodeImages(ctx)
+		if err != nil {
+			r.p.warnf("can't list the nodes' images, so this learn run won't list what the release pulled: %v", err)
+		}
+		r.imagesBefore = images
 	}
 
 	env := ops.Env{
@@ -294,6 +318,30 @@ func (r *run) collect() {
 			r.iso.RejectedPackets += lockdown.Rejected(ctx, r.cluster, node)
 		}
 	}
+	if r.o.Learn && r.imagesBefore != nil {
+		if after, err := r.nodeImages(ctx); err == nil {
+			r.learned = learn.New(r.imagesBefore, after)
+		} else {
+			r.p.warnf("can't list the nodes' images, so this learn run won't list what the release pulled: %v", err)
+		}
+	}
+}
+
+// nodeImages lists the images on every node, as canonical references.
+func (r *run) nodeImages(ctx context.Context) ([]string, error) {
+	var refs []string
+	for _, node := range r.cluster.Nodes() {
+		out, err := r.cluster.Exec(ctx, node, learn.ImagesCommand...)
+		if err != nil {
+			return nil, fmt.Errorf("node %s: %w", node, err)
+		}
+		images, err := learn.ParseImages(out)
+		if err != nil {
+			return nil, fmt.Errorf("node %s: %w", node, err)
+		}
+		refs = append(refs, images...)
+	}
+	return refs, nil
 }
 
 // attributedEvidence ties each DNS query to the pod that held the client IP

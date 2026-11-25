@@ -54,6 +54,8 @@ type Report struct {
 	Operations      []Operation `json:"operations"`
 	// Unattributed holds findings outside every operation's window.
 	Unattributed []Finding `json:"unattributedFindings,omitempty"`
+	// Learned lists every image the release pulled, in a learn run.
+	Learned []LearnedImage `json:"learnedImages,omitempty"`
 }
 
 // Environment describes where the drill ran.
@@ -83,6 +85,9 @@ type Isolation struct {
 	ReachableBefore bool     `json:"reachableBefore"`
 	RejectedPackets int64    `json:"rejectedPackets"`
 	Warnings        []string `json:"warnings,omitempty"`
+	// Learn is true for a learn run: the pods were offline, but the nodes
+	// could pull images the bundle lacked from their registries.
+	Learn bool `json:"learn,omitempty"`
 }
 
 // Operation is one operation's result.

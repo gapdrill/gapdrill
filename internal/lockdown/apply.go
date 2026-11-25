@@ -39,7 +39,7 @@ func applyFamily(ctx context.Context, x Execer, node string, f Family, n Network
 			return fmt.Errorf("%s on node %s: %w", c, node, err)
 		}
 	}
-	for _, c := range Checks(f) {
+	for _, c := range Checks(f, n) {
 		if _, err := x.Exec(ctx, node, c...); err != nil {
 			return fmt.Errorf("egress rules missing after install (%s on node %s): %w", c, node, err)
 		}

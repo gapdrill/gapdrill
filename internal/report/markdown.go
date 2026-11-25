@@ -62,11 +62,32 @@ func (r *Report) Markdown() string {
 		p("\n")
 	}
 
+	if len(r.Learned) > 0 {
+		p("## Images the release pulled\n\n")
+		p("This was a learn run, so nodes pulled images the bundle lacked from their own registries. `images.learned.txt` has this list, ready to use as the bundle's image list.\n\n")
+		for _, img := range r.Learned {
+			if img.InBundle {
+				p("- `%s`\n", img.Image)
+			} else {
+				p("- `%s` (not in the bundle)\n", img.Image)
+			}
+		}
+		p("\n")
+	}
+
 	p("## How the cluster was isolated\n\n")
-	p("- Nodes and pods could reach only the cluster and the bundle registry (iptables and ip6tables rules inside each node).\n")
-	p("- Names outside the cluster got NXDOMAIN from CoreDNS.\n")
-	p("- Every registry, including ones not in the bundle, was served by the bundle registry, with no upstream fallback.\n")
+	if r.Isolation.Learn {
+		p("- Learn run: pods could reach only the cluster and the bundle registry (iptables and ip6tables rules inside each node), but the nodes stayed online.\n")
+		p("- Names outside the cluster got NXDOMAIN from CoreDNS.\n")
+		p("- Every pull asked the bundle registry first; images the bundle lacked came from their own registries.\n")
+		p("- The probe check doesn't apply to a learn run: the nodes are online by design.\n")
+	} else {
+		p("- Nodes and pods could reach only the cluster and the bundle registry (iptables and ip6tables rules inside each node).\n")
+		p("- Names outside the cluster got NXDOMAIN from CoreDNS.\n")
+		p("- Every registry, including ones not in the bundle, was served by the bundle registry, with no upstream fallback.\n")
+	}
 	switch {
+	case r.Isolation.Learn:
 	case r.Isolation.Verified && r.Isolation.ReachableBefore:
 		p("- Verified: %s was reachable from the node before isolation and unreachable after.\n", r.Isolation.ProbeURL)
 	case r.Isolation.Verified:

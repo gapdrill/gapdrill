@@ -54,6 +54,25 @@ func TestRulesIPv6OnlyAllowsIPv6Networks(t *testing.T) {
 	}
 }
 
+func TestNodesOnlineCutsOffOnlyThePods(t *testing.T) {
+	n := testNet
+	n.NodesOnline = true
+	rules := join(Rules(IPv4, n))
+	if strings.Contains(rules, "-I OUTPUT") {
+		t.Errorf("with the nodes online, the chain must not be hooked into OUTPUT:\n%s", rules)
+	}
+	if !strings.Contains(rules, "-I FORWARD 1 -j "+Chain) {
+		t.Errorf("the pods must still be cut off:\n%s", rules)
+	}
+	checks := join(Checks(IPv4, n))
+	if strings.Contains(checks, "OUTPUT") || !strings.Contains(checks, "-C FORWARD -j "+Chain) {
+		t.Errorf("checks must match the hooks:\n%s", checks)
+	}
+	if all := join(Checks(IPv4, testNet)); !strings.Contains(all, "-C OUTPUT") || !strings.Contains(all, "-C FORWARD") {
+		t.Errorf("by default both hooks are checked:\n%s", all)
+	}
+}
+
 func TestGatewayRejectComesBeforeNodeSubnetReturn(t *testing.T) {
 	rules := join(Rules(IPv4, testNet))
 	if strings.Index(rules, "-d 172.18.0.1/32 -j REJECT") > strings.Index(rules, "-d 172.18.0.0/16 -j RETURN") {

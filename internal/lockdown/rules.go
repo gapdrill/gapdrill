@@ -27,6 +27,10 @@ type Network struct {
 	Gateways    []netip.Addr
 	PodCIDR     netip.Prefix
 	ServiceCIDR netip.Prefix
+	// NodesOnline cuts off only the pods and leaves the nodes' own traffic
+	// alone. Learn mode uses it so that containerd can pull images the
+	// bundle lacks from their registries.
+	NodesOnline bool
 }
 
 // Family is an IP family's iptables binary and its specifics.
@@ -79,18 +83,22 @@ func Rules(f Family, n Network) []Command {
 	}
 	add("-A", Chain, "-p", "tcp", "-j", "REJECT", "--reject-with", "tcp-reset")
 	add("-A", Chain, "-j", "REJECT", "--reject-with", f.rejectWith)
-	add("-I", "OUTPUT", "1", "-j", Chain)
+	if !n.NodesOnline {
+		add("-I", "OUTPUT", "1", "-j", Chain)
+	}
 	add("-I", "FORWARD", "1", "-j", Chain)
 	return cmds
 }
 
-// Checks returns commands that succeed only if the chain is hooked into
-// OUTPUT and FORWARD for family f.
-func Checks(f Family) []Command {
-	return []Command{
-		{f.Binary, "-w", "5", "-C", "OUTPUT", "-j", Chain},
-		{f.Binary, "-w", "5", "-C", "FORWARD", "-j", Chain},
+// Checks returns commands that succeed only if the chain is hooked in for
+// family f: into FORWARD for the pods' traffic and, unless n.NodesOnline,
+// into OUTPUT for the nodes' own.
+func Checks(f Family, n Network) []Command {
+	var cmds []Command
+	if !n.NodesOnline {
+		cmds = append(cmds, Command{f.Binary, "-w", "5", "-C", "OUTPUT", "-j", Chain})
 	}
+	return append(cmds, Command{f.Binary, "-w", "5", "-C", "FORWARD", "-j", Chain})
 }
 
 // CountCommand lists the chain with exact packet counters for family f.

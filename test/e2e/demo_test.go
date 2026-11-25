@@ -185,6 +185,40 @@ func TestInstallStopsOnAnImageItCantPull(t *testing.T) {
 	}
 }
 
+// A learn run lets the nodes fetch what the bundle lacks, so the CronJob
+// works, and it lists every image the release pulled.
+func TestLearnRunListsEveryImageTheReleasePulled(t *testing.T) {
+	r, code, dir := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"),
+		"--name", "demo", "--learn")
+	if code != 1 {
+		t.Fatalf("exit code %d, want 1: learn mode doesn't open PyPI, so the install still fails; verdict %s %s", code, r.Verdict, r.Error)
+	}
+	if !r.Isolation.Learn {
+		t.Error("the report must say this was a learn run")
+	}
+	if cleanup := operation(t, r, "cronjobs/demo-cleanup"); cleanup.Status != report.StatusPassed {
+		t.Errorf("in a learn run the CronJob's image comes from its registry, so the job should pass: %+v", cleanup)
+	}
+
+	inBundle := map[string]bool{}
+	for _, img := range r.Learned {
+		inBundle[img.Image] = img.InBundle
+	}
+	for image, want := range map[string]bool{
+		"docker.io/library/busybox:1.36.1":     true,
+		"docker.io/library/python:3.12-alpine": true,
+		"docker.io/library/busybox:1.37.0":     false,
+	} {
+		if got, ok := inBundle[image]; !ok || got != want {
+			t.Errorf("learned images %+v: want %s with inBundle=%v", r.Learned, image, want)
+		}
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "images.learned.txt"))
+	if err != nil || !strings.Contains(string(b), "docker.io/library/busybox:1.37.0 # new\n") {
+		t.Errorf("images.learned.txt should mark busybox:1.37.0 as new (%v):\n%s", err, b)
+	}
+}
+
 func TestFixedDemoDrillPasses(t *testing.T) {
 	r, code, _ := drill(t, "gapdrill-fixed.yaml")
 	if code != 0 || r.Verdict != report.Passed {

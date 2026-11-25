@@ -82,6 +82,15 @@ It installs the release, runs every CronJob once (including CronJobs the
 release creates at runtime) and runs the chart's tests if it has any. Add
 `--values`, `--set`, `--name` or `--namespace` as you would with Helm.
 
+Not sure what belongs in the bundle? A learn run lets the nodes pull images
+the bundle lacks from their registries (the pods stay offline), then writes
+every image the release pulled to `gapdrill-report/images.learned.txt`, with
+the missing ones marked. Use the file as your image list:
+
+```sh
+gapdrill run --chart ./charts/my-chart --images images.txt --learn
+```
+
 To exercise more than that, write the drill to a file and add the operations
 your users depend on:
 

@@ -26,6 +26,8 @@ that aren't scheduled yet are in [docs/ideas.md](docs/ideas.md).
 
 ## v0.2: easy to adopt in CI
 
+- Learn mode: `--learn` lists every image the release pulled, marking the
+  ones the bundle lacked ([design](docs/design/0003-learn-mode.md)).
 - A probe pod, to verify pod egress directly as well as by rule presence.
 - Blocked connections attributed to the pods that made them.
 

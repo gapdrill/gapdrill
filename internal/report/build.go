@@ -45,6 +45,8 @@ type Input struct {
 	// BundleDigests maps bundle images to their digests in the bundle
 	// registry, so a pull by digest matches an image listed by tag.
 	BundleDigests map[string]string
+	// LearnedPulled lists the images the nodes pulled during a learn run.
+	LearnedPulled []string
 }
 
 // clockSlack allows for small differences between the host's clock, which
@@ -116,6 +118,9 @@ func Build(in Input) *Report {
 	// Without operations that ran, every image would look unused.
 	if in.HarnessError == nil && r.RanCount() > 0 {
 		r.Bundle.NotPulled = notPulled(in.Bundle, in.BundleDigests, in.Pulled)
+		if in.Isolation.Learn {
+			r.Learned = learnedImages(in.Bundle, in.BundleDigests, in.LearnedPulled)
+		}
 	}
 
 	switch {

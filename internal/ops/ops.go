@@ -17,6 +17,7 @@ import (
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -36,6 +37,9 @@ type Env struct {
 	// Dir is the drill file's directory; exec operations run there.
 	Dir       string
 	Clientset kubernetes.Interface
+	// SkipNamespaces hold the cluster's own components; runCronJobs leaves
+	// their CronJobs alone.
+	SkipNamespaces []string
 }
 
 // Result is an operation's outcome. Output is the tail of what it printed.
@@ -166,13 +170,26 @@ func runCronJob(ctx context.Context, env Env, op *spec.RunCronJobOp, timeout tim
 	out := fmt.Sprintf("job.batch/%s created from cronjob/%s\n", created.Name, cj.Name)
 
 	var last *batchv1.Job
+	var stuckSince time.Time
+	var stuckImage string
 	err = wait.PollUntilContextTimeout(ctx, time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		j, err := jobs.Get(ctx, created.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, nil // transient; keep polling
 		}
 		last = j
-		return condition(j, batchv1.JobComplete) != nil || condition(j, batchv1.JobFailed) != nil, nil
+		if condition(j, batchv1.JobComplete) != nil || condition(j, batchv1.JobFailed) != nil {
+			return true, nil
+		}
+		if image := jobPullFailure(ctx, env, j); image != "" {
+			if stuckSince.IsZero() {
+				stuckSince = time.Now()
+			}
+			stuckImage = image
+			return time.Since(stuckSince) >= pullGrace, nil
+		}
+		stuckSince = time.Time{}
+		return false, nil
 	})
 	if err != nil {
 		return Result{Output: out, Err: fmt.Errorf("job %s didn't finish within %s", created.Name, timeout)}
@@ -180,7 +197,47 @@ func runCronJob(ctx context.Context, env Env, op *spec.RunCronJobOp, timeout tim
 	if c := condition(last, batchv1.JobFailed); c != nil {
 		return Result{Output: out, Err: fmt.Errorf("job %s failed: %s", created.Name, strings.TrimSpace(c.Reason+": "+c.Message))}
 	}
+	if condition(last, batchv1.JobComplete) == nil {
+		return Result{Output: out, Err: fmt.Errorf("job %s can't start: %s can't be pulled", created.Name, stuckImage)}
+	}
 	return Result{Output: out + fmt.Sprintf("job.batch/%s completed\n", created.Name)}
+}
+
+// pullGrace is how long a Job's pod may fail to pull an image before the
+// operation fails. Offline, a pull that fails keeps failing, so waiting out
+// the whole timeout only slows the drill down.
+const pullGrace = 20 * time.Second
+
+// jobPullFailure returns an image one of the Job's pods can't pull, or "".
+func jobPullFailure(ctx context.Context, env Env, j *batchv1.Job) string {
+	pods, err := env.Clientset.CoreV1().Pods(j.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: batchv1.JobNameLabel + "=" + j.Name,
+	})
+	if err != nil {
+		return ""
+	}
+	for i := range pods.Items {
+		if image := pullFailure(&pods.Items[i]); image != "" {
+			return image
+		}
+	}
+	return ""
+}
+
+// pullFailure returns the image a pod's container is waiting for because it
+// can't be pulled, or "".
+func pullFailure(p *corev1.Pod) string {
+	for _, statuses := range [][]corev1.ContainerStatus{p.Status.InitContainerStatuses, p.Status.ContainerStatuses} {
+		for _, s := range statuses {
+			if w := s.State.Waiting; w != nil {
+				switch w.Reason {
+				case "ErrImagePull", "ImagePullBackOff", "InvalidImageName":
+					return s.Image
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // JobFromCronJob builds the Job that `kubectl create job --from=cronjob/NAME`

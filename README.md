@@ -72,7 +72,25 @@ go install github.com/gapdrill/gapdrill/cmd/gapdrill@latest
 
 ## Quick start
 
-Put a drill file next to your chart:
+Point gapdrill at a chart and the images your offline bundle ships:
+
+```sh
+gapdrill run --chart ./charts/my-chart --images images.txt
+```
+
+It installs the release, runs every CronJob once (including CronJobs the
+release creates at runtime) and runs the chart's tests if it has any. Add
+`--values`, `--set`, `--name` or `--namespace` as you would with Helm.
+
+To exercise more than that, write the drill to a file and add the operations
+your users depend on:
+
+```sh
+gapdrill init --chart ./charts/my-chart --images images.txt   # writes gapdrill.yaml
+gapdrill run                                                   # reads ./gapdrill.yaml
+```
+
+A drill file looks like this:
 
 ```yaml
 # gapdrill.yaml
@@ -93,12 +111,6 @@ operations:
     runCronJob: {name: my-chart-cleanup}
   - name: chart-tests
     helmTest: {}
-```
-
-Then run it:
-
-```sh
-gapdrill run            # reads ./gapdrill.yaml
 ```
 
 Try the demo in [examples/demo](examples/demo): one drill fails on two
@@ -167,13 +179,17 @@ kubeconfig or firewall. The full design is in
 | `release.name`, `release.namespace` | Release name; the namespace defaults to the release name. |
 | `release.valuesFiles`, `release.set` | Values for the release, as with `helm --values` and `--set`. |
 | `operations[].helmInstall` | Install the release and wait (`timeout`, default `5m`). |
-| `operations[].helmTest` | Run the chart's test hooks (`timeout`, default `3m`). |
+| `operations[].helmTest` | Run the chart's test hooks (`timeout`, default `3m`). With `ifPresent: true`, the operation is skipped when the chart has no tests. |
 | `operations[].runCronJob` | Start a Job from a CronJob, like `kubectl create job --from=cronjob/…`, and wait for it (`name`, `namespace`, `timeout`). |
+| `operations[].runCronJobs` | Run every CronJob in the cluster once, outside Kubernetes' own namespaces, including CronJobs created at runtime. Each is reported as `<operation>/<CronJob>` (`timeout` per CronJob, default `3m`). |
 | `operations[].exec` | Run a command on the host, with `KUBECONFIG` set to the offline cluster (`command`, `timeout`). |
 | `operations[].settle` | How long after the operation ends its evidence is still collected (default `5s`). |
 
 Unknown fields are errors, so typos fail loudly. Check a file with
-`gapdrill validate`.
+`gapdrill validate`. Offline, an image pull that fails keeps failing, so a
+CronJob's Job fails 20 seconds after its pod can't pull an image rather than
+at its timeout. [Design doc 0002](docs/design/0002-zero-config-drills.md)
+covers drills without a drill file.
 
 ## Exit codes
 

@@ -152,6 +152,39 @@ func TestWindowsPartitionTheDrill(t *testing.T) {
 	}
 }
 
+func TestSkippedOperationsGetNoEvidence(t *testing.T) {
+	cleanup := &evidence.Pod{Namespace: "demo", Name: "c", UID: "u", Owner: "CronJob demo-cleanup"}
+	r := Build(Input{
+		Bundle: []string{"docker.io/library/busybox:1.36.1"},
+		Operations: []OperationRun{
+			{Name: "install", Start: at(0), End: at(10), Settle: 5 * time.Second},
+			{Name: "chart-tests", Start: at(15), End: at(15), Skipped: "the chart has no tests"},
+			{Name: "cronjobs/cleanup", Start: at(15), End: at(40), Settle: 5 * time.Second, Err: errors.New("can't start")},
+		},
+		Evidence: []evidence.Item{{Kind: evidence.ImagePullFailed, Time: at(15), Pod: cleanup, Image: "busybox:1.37.0"}},
+	})
+
+	if op := r.Operations[1]; op.Status != StatusSkipped || op.Summary != "Skipped: the chart has no tests." || len(op.Findings) != 0 {
+		t.Errorf("skipped operation = %+v", op)
+	}
+	if n := len(r.Operations[2].Findings); n != 1 {
+		t.Errorf("the pull failure belongs to the CronJob that ran, not the skipped tests; got %d findings", n)
+	}
+	if r.Verdict != Failed || r.RanCount() != 2 {
+		t.Errorf("verdict %s, %d ran", r.Verdict, r.RanCount())
+	}
+
+	md := r.Markdown()
+	for _, want := range []string{"**✗ Failed:** 1 of 2 operations failed. 1 skipped.", "| chart-tests | – skipped |"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("Markdown lacks %q:\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "## chart-tests") {
+		t.Error("a skipped operation has nothing to detail")
+	}
+}
+
 func TestPassingOperationKeepsWarnings(t *testing.T) {
 	in := demoInput()
 	in.Operations[0].Err = nil

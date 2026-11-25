@@ -83,6 +83,7 @@ type Operation struct {
 	HelmInstall *HelmInstallOp `json:"helmInstall,omitempty"`
 	HelmTest    *HelmTestOp    `json:"helmTest,omitempty"`
 	RunCronJob  *RunCronJobOp  `json:"runCronJob,omitempty"`
+	RunCronJobs *RunCronJobsOp `json:"runCronJobs,omitempty"`
 	Exec        *ExecOp        `json:"exec,omitempty"`
 }
 
@@ -94,6 +95,9 @@ type HelmInstallOp struct {
 // HelmTestOp runs the chart's test hooks.
 type HelmTestOp struct {
 	Timeout *Duration `json:"timeout,omitempty"`
+	// IfPresent skips the operation when the chart has no test hooks, so a
+	// chart without tests isn't reported as passing them.
+	IfPresent bool `json:"ifPresent,omitempty"`
 }
 
 // RunCronJobOp starts a Job from a CronJob's template, as
@@ -103,6 +107,15 @@ type RunCronJobOp struct {
 	// Namespace defaults to the release namespace.
 	Namespace string    `json:"namespace,omitempty"`
 	Timeout   *Duration `json:"timeout,omitempty"`
+}
+
+// RunCronJobsOp runs every CronJob in the cluster, outside Kubernetes' own
+// namespaces, as the operation starts. Each runs once, as its own operation
+// in the report. That includes CronJobs the release's controllers create at
+// runtime, which no rendered manifest shows.
+type RunCronJobsOp struct {
+	// Timeout applies to each CronJob's Job.
+	Timeout *Duration `json:"timeout,omitempty"`
 }
 
 // ExecOp runs a command on the host with KUBECONFIG pointing at the offline
@@ -118,6 +131,7 @@ const (
 	TypeHelmInstall = "helmInstall"
 	TypeHelmTest    = "helmTest"
 	TypeRunCronJob  = "runCronJob"
+	TypeRunCronJobs = "runCronJobs"
 	TypeExec        = "exec"
 )
 
@@ -130,6 +144,8 @@ func (o Operation) Type() string {
 		return TypeHelmTest
 	case o.RunCronJob != nil:
 		return TypeRunCronJob
+	case o.RunCronJobs != nil:
+		return TypeRunCronJobs
 	case o.Exec != nil:
 		return TypeExec
 	}
@@ -138,7 +154,7 @@ func (o Operation) Type() string {
 
 func (o Operation) typeCount() int {
 	n := 0
-	for _, set := range []bool{o.HelmInstall != nil, o.HelmTest != nil, o.RunCronJob != nil, o.Exec != nil} {
+	for _, set := range []bool{o.HelmInstall != nil, o.HelmTest != nil, o.RunCronJob != nil, o.RunCronJobs != nil, o.Exec != nil} {
 		if set {
 			n++
 		}
@@ -155,6 +171,8 @@ func (o Operation) Timeout() time.Duration {
 		return o.HelmTest.Timeout.Or(DefaultOperationTimeout)
 	case o.RunCronJob != nil:
 		return o.RunCronJob.Timeout.Or(DefaultOperationTimeout)
+	case o.RunCronJobs != nil:
+		return o.RunCronJobs.Timeout.Or(DefaultOperationTimeout)
 	case o.Exec != nil:
 		return o.Exec.Timeout.Or(DefaultOperationTimeout)
 	}

@@ -51,6 +51,9 @@ const (
 // Options configure a drill run.
 type Options struct {
 	DrillPath string
+	// Drill, when set, is run instead of the drill at DrillPath: it's how
+	// `gapdrill run --chart` runs a drill built from flags.
+	Drill     *spec.Drill
 	ReportDir string
 	// Keep leaves the cluster running for debugging.
 	Keep     bool
@@ -131,20 +134,36 @@ func Validate(path string) (*spec.Drill, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	refs, err := d.BundleImages()
+	refs, err := bundleRefs(d)
 	if err != nil {
 		return nil, nil, err
-	}
-	for _, ref := range refs {
-		if _, err := mirror.Parse(ref); err != nil {
-			return nil, nil, fmt.Errorf("bundle: %w", err)
-		}
 	}
 	return d, refs, nil
 }
 
+// bundleRefs returns the drill's bundle images, checking each reference.
+func bundleRefs(d *spec.Drill) ([]string, error) {
+	refs, err := d.BundleImages()
+	if err != nil {
+		return nil, err
+	}
+	for _, ref := range refs {
+		if _, err := mirror.Parse(ref); err != nil {
+			return nil, fmt.Errorf("bundle: %w", err)
+		}
+	}
+	return refs, nil
+}
+
 func (r *run) load() error {
-	d, refs, err := Validate(r.o.DrillPath)
+	d := r.o.Drill
+	var refs []string
+	var err error
+	if d == nil {
+		d, refs, err = Validate(r.o.DrillPath)
+	} else {
+		refs, err = bundleRefs(d)
+	}
 	if err != nil {
 		return fmt.Errorf("invalid drill: %w", err)
 	}

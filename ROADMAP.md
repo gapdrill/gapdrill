@@ -10,7 +10,9 @@ that aren't scheduled yet are in [docs/ideas.md](docs/ideas.md).
 - `gapdrill run`, `validate`, `cleanup` and `version`.
 - Isolation: bundle registry with no upstream fallback, NXDOMAIN DNS, egress
   rules in every node, verified before any operation runs.
-- Operations: Helm install, Helm test, run a CronJob, exec.
+- Operations: Helm install, Helm test, run one CronJob or all of them, exec.
+- Zero-config drills: `gapdrill run --chart … --images …` and `gapdrill init`
+  ([design](docs/design/0002-zero-config-drills.md)).
 - Reports in Markdown and JSON, with findings attributed to operations and
   owners.
 - A demo that fails on two realistic offline bugs and passes once they're

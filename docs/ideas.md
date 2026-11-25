@@ -26,7 +26,7 @@ changes the drill or report formats or how isolation works.
 | 9 | [Fix hints](#9-fix-hints) | Explain and fix | S–M | Proposed |
 | 10 | [Readiness badge](#10-readiness-badge) | Show | S | Proposed |
 | 11 | [Drills in an existing cluster](#11-drills-in-an-existing-cluster) | Prove | L | Research |
-| 12 | [Fail fast during install](#12-fail-fast-during-install) | Prove | S–M | Proposed |
+| 12 | [Fail fast during install](#12-fail-fast-during-install) | Prove | S–M | Shipped in v0.1 |
 | 13 | [Unused bundle images](#13-unused-bundle-images) | Explain and fix | S | Shipped in v0.1 |
 
 "Next up" marks the ideas that matter most for adoption: they remove setup,
@@ -209,6 +209,8 @@ once one has failed to pull an image for 20 seconds, reporting the image.
 longest timeout.
 
 **Effort.** S to M.
+
+**Status.** Shipped in v0.1.
 
 ## 13. Unused bundle images
 

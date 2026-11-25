@@ -156,6 +156,25 @@ func TestZeroConfigDrillFindsTheCronJobItself(t *testing.T) {
 	}
 }
 
+// An install whose Deployment needs an image missing from the bundle must stop
+// soon after the pull fails, not after Helm's five-minute timeout.
+func TestInstallStopsOnAnImageItCantPull(t *testing.T) {
+	r, code := gapdrill(t, "--chart", filepath.Join(demoDir, "chart"), "--images", filepath.Join(demoDir, "images.txt"),
+		"--name", "demo", "--set", "image=docker.io/library/busybox:9.9.9")
+	if code != 1 {
+		t.Fatalf("exit code %d, want 1 (operations failed); verdict %s %s", code, r.Verdict, r.Error)
+	}
+	install := operation(t, r, "install")
+	if install.Status != report.StatusFailed || !hasFinding(install, report.MissingImage, func(f report.Finding) bool {
+		return f.Image == "docker.io/library/busybox:9.9.9"
+	}) {
+		t.Errorf("install should fail on the web server's missing image: %+v", install)
+	}
+	if install.DurationSeconds > 90 {
+		t.Errorf("install should stop soon after the pull fails, not after %.0fs", install.DurationSeconds)
+	}
+}
+
 func TestFixedDemoDrillPasses(t *testing.T) {
 	r, code := drill(t, "gapdrill-fixed.yaml")
 	if code != 0 || r.Verdict != report.Passed {

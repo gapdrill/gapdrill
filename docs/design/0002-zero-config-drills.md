@@ -56,9 +56,10 @@ it doesn't count in "N of M operations failed".
 
 Offline, a failed image pull never recovers. A CronJob's Job now fails once
 one of its pods has been unable to pull an image for 20 seconds, instead of
-waiting out its timeout (three minutes by default). The finding still names the
-image, from the pod's status and the registry log. Helm installs still wait for
-Helm's own timeout; failing those fast is future work.
+waiting out its timeout (three minutes by default). An install stops the same
+way when any pod outside the system namespaces is stuck, instead of waiting out
+Helm's `--timeout` (five minutes by default). The finding still names the
+image, from the pod's status and the registry log.
 
 ## Alternatives considered
 

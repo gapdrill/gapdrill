@@ -6,6 +6,7 @@ package ops
 import (
 	"context"
 	"testing"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -91,22 +92,50 @@ func TestHasTestHook(t *testing.T) {
 	}
 }
 
-func TestPullFailure(t *testing.T) {
-	waiting := func(reason string) corev1.ContainerStatus {
-		return corev1.ContainerStatus{Image: "busybox:1.37.0", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: reason}}}
+func waitingOn(reason string) corev1.ContainerStatus {
+	return corev1.ContainerStatus{
+		Name:  "app",
+		Image: "busybox:1.37.0",
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: reason}},
 	}
-	for _, tt := range []struct {
-		name string
-		pod  corev1.Pod
-		want string
+}
+
+func TestPullWatchWaitsForAStuckPull(t *testing.T) {
+	pod := func(reason string) []corev1.Pod {
+		return []corev1.Pod{{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "demo", Name: "web"},
+			Status:     corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{waitingOn(reason)}},
+		}}
+	}
+	t0 := time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC)
+	var w pullWatch
+	for _, step := range []struct {
+		at     time.Duration
+		reason string
+		want   string
 	}{
-		{"back-off", corev1.Pod{Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{waiting("ImagePullBackOff")}}}, "busybox:1.37.0"},
-		{"init container", corev1.Pod{Status: corev1.PodStatus{InitContainerStatuses: []corev1.ContainerStatus{waiting("ErrImagePull")}}}, "busybox:1.37.0"},
-		{"still creating", corev1.Pod{Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{waiting("ContainerCreating")}}}, ""},
-		{"no status yet", corev1.Pod{}, ""},
+		{0, "ErrImagePull", ""},
+		{10 * time.Second, "ImagePullBackOff", ""},  // failing, but not for long enough
+		{15 * time.Second, "ContainerCreating", ""}, // the pull recovered: start over
+		{20 * time.Second, "ErrImagePull", ""},
+		{39 * time.Second, "ImagePullBackOff", ""}, // 19s since it failed again
+		{40 * time.Second, "ImagePullBackOff", "busybox:1.37.0"},
 	} {
-		if got := pullFailure(&tt.pod); got != tt.want {
-			t.Errorf("%s: pullFailure = %q, want %q", tt.name, got, tt.want)
+		if got := w.update(pod(step.reason), t0.Add(step.at)); got != step.want {
+			t.Errorf("at %s (%s): update = %q, want %q", step.at, step.reason, got, step.want)
 		}
+	}
+}
+
+func TestPullWatchCoversInitContainers(t *testing.T) {
+	pods := []corev1.Pod{{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "demo", Name: "migrate"},
+		Status:     corev1.PodStatus{InitContainerStatuses: []corev1.ContainerStatus{waitingOn("ErrImagePull")}},
+	}}
+	t0 := time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC)
+	var w pullWatch
+	w.update(pods, t0)
+	if got := w.update(pods, t0.Add(pullGrace)); got != "busybox:1.37.0" {
+		t.Errorf("update = %q, want the init container's image", got)
 	}
 }

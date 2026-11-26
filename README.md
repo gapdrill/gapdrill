@@ -127,6 +127,10 @@ operations:
 Try the demo in [examples/demo](examples/demo): one drill fails on two
 realistic bugs, and the other passes once they're fixed.
 
+An upgrade can request an image a fresh install never pulls. Run a migration
+with a missing image, roll back the release, and check what the old application
+can read in the [offline upgrade example](examples/upgrade).
+
 ## Run it in GitHub Actions
 
 ```yaml

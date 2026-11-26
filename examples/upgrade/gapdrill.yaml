@@ -1,0 +1,40 @@
+apiVersion: gapdrill/v1alpha1
+kind: Drill
+metadata:
+  name: upgrade-recovery
+bundle:
+  imagesFile: images.txt
+release:
+  chart: ./v1
+  name: ledger
+operations:
+  - name: install-v1
+    helmInstall: {}
+  - name: upgrade-v2
+    exec:
+      command:
+        - sh
+        - -ec
+        - |
+          exec helm upgrade "$GAPDRILL_RELEASE" ./v2 --namespace "$GAPDRILL_NAMESPACE" --wait --timeout 2m
+  - name: rollback-to-v1
+    exec:
+      command:
+        - sh
+        - -ec
+        - |
+          exec helm rollback "$GAPDRILL_RELEASE" 1 --namespace "$GAPDRILL_NAMESPACE" --wait --timeout 2m
+  - name: read-restored-state
+    exec:
+      command:
+        - sh
+        - -ec
+        - |
+          # A release without any test hooks can make helm test exit successfully.
+          # Require the message printed by the pod after it reads the live ConfigMap.
+          result=$(helm test "$GAPDRILL_RELEASE" --namespace "$GAPDRILL_NAMESPACE" --logs --timeout 2m) || {
+            printf '%s\n' "$result"
+            exit 1
+          }
+          printf '%s\n' "$result"
+          printf '%s\n' "$result" | grep -Fq 'read restored schema v1'

@@ -1,0 +1,4 @@
+apiVersion: v2
+name: ledger
+description: The installed revision in the offline upgrade example.
+version: 1.0.0

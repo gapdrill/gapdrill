@@ -225,3 +225,43 @@ func TestFixedDemoDrillPasses(t *testing.T) {
 		t.Fatalf("exit code %d, verdict %s; want 0 and passed: %+v", code, r.Verdict, r.Operations)
 	}
 }
+
+func TestOfflineUpgradeAndRollback(t *testing.T) {
+	const image = "docker.io/library/busybox:1.37.0"
+	dir := t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS(filepath.Join("..", "..", "examples", "upgrade"))); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "gapdrill.yaml")
+
+	run := func(t *testing.T, wantCode int) report.Operation {
+		t.Helper()
+		r, code, _ := gapdrill(t, "-f", file)
+		if code != wantCode || !r.Isolation.Verified || r.Isolation.Learn {
+			t.Fatalf("exit %d, want %d with verified strict isolation: %+v", code, wantCode, r)
+		}
+		for _, name := range []string{"install-v1", "rollback-to-v1", "read-restored-state"} {
+			if op := operation(t, r, name); op.Status != report.StatusPassed {
+				t.Fatalf("%s should pass: %+v", name, op)
+			}
+		}
+		return operation(t, r, "upgrade-v2")
+	}
+
+	broken := run(t, 1)
+	if broken.Status != report.StatusFailed || !hasFinding(broken, report.MissingImage, func(f report.Finding) bool { return f.Image == image }) {
+		t.Fatalf("the upgrade should report the missing migration image: %+v", broken)
+	}
+
+	imagesFile := filepath.Join(dir, "images.txt")
+	images, err := os.ReadFile(imagesFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(imagesFile, append(images, image+"\n"...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if fixed := run(t, 0); fixed.Status != report.StatusPassed {
+		t.Fatalf("the upgrade should pass with the migration image shipped: %+v", fixed)
+	}
+}

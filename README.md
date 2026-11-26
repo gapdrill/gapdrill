@@ -82,6 +82,10 @@ It installs the release, runs every CronJob once (including CronJobs the
 release creates at runtime) and runs the chart's tests if it has any. Add
 `--values`, `--set`, `--name` or `--namespace` as you would with Helm.
 
+Learn mode and `gapdrill compare` are available in source builds after
+v0.1.0. To try them from this checkout, run `make build` and use
+`bin/gapdrill`.
+
 Not sure what belongs in the bundle? A learn run lets the nodes pull images
 the bundle lacks from their registries (the pods stay offline), then writes
 every image the release pulled to `gapdrill-report/images.learned.txt`, with
@@ -207,7 +211,7 @@ kubeconfig or firewall. The full design is in
 | `operations[].helmTest` | Run the chart's test hooks (`timeout`, default `3m`). With `ifPresent: true`, the operation is skipped when the chart has no tests. |
 | `operations[].runCronJob` | Start a Job from a CronJob, like `kubectl create job --from=cronjob/…`, and wait for it (`name`, `namespace`, `timeout`). |
 | `operations[].runCronJobs` | Run every CronJob in the cluster once, outside Kubernetes' own namespaces, including CronJobs created at runtime. Each is reported as `<operation>/<CronJob>` (`timeout` per CronJob, default `3m`). |
-| `operations[].exec` | Run a command on the host, with `KUBECONFIG` set to the offline cluster (`command`, `timeout`). |
+| `operations[].exec` | Run a command on the host, with `KUBECONFIG` set to the offline cluster. `GAPDRILL_RELEASE` and `GAPDRILL_NAMESPACE` identify the release (`command`, `timeout`). |
 | `operations[].settle` | How long after the operation ends its evidence is still collected (default `5s`). |
 
 Unknown fields are errors, so typos fail loudly. Check a file with
@@ -240,6 +244,10 @@ and the [ideas](docs/ideas.md) not yet scheduled.
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Commits
 need a [DCO](https://developercertificate.org/) sign-off (`git commit -s`).
+The [gapdrill agent skill](skills/gapdrill/SKILL.md) covers running drills,
+reading reports and contributing to the code. Copy the whole
+`skills/gapdrill` directory into your agent's skills directory to install it.
+
 Using gapdrill in your release pipeline? Add yourself to
 [ADOPTERS.md](ADOPTERS.md).
 

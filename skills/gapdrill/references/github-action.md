@@ -11,7 +11,7 @@ At a release tag the action runs these steps.
 4. Adds the report to the job summary.
 5. Uploads the report directory as an artifact.
 
-The v0.1.0 Action exits with the drill's status. A failed operation, an
+The v0.2.0 Action exits with the drill's status. A failed operation, an
 invalid input or a harness error fails the step.
 
 ## A basic job
@@ -37,7 +37,7 @@ jobs:
       - uses: azure/setup-helm@v5
         with:
           version: v3.22.1
-      - uses: gapdrill/gapdrill@v0.1.0
+      - uses: gapdrill/gapdrill@v0.2.0
         with:
           drill: gapdrill.yaml
 ```
@@ -52,7 +52,7 @@ commit SHAs), and follow the same convention.
 | `drill` | `gapdrill.yaml` | Path to the drill file |
 | `report-dir` | `gapdrill-report` | Where the report is written |
 | `args` | | Extra `gapdrill run` arguments, such as `--timeout 45m`. They're split on spaces, and quotes aren't interpreted. |
-| `version` | the action's release | The gapdrill release to run, such as `v0.1.0` |
+| `version` | the action's release | The gapdrill release to run, such as `v0.2.0` |
 | `upload-report` | `true` | Upload the report directory as an artifact |
 | `artifact-name` | `gapdrill-report` | The artifact's name. Give each drill its own. |
 
@@ -70,7 +70,7 @@ To act on the outputs in a later step, give the action an `id`, add
 ## Comparing pull requests
 
 Use the basic job above to gate on the strict drill's verdict. The
-`gapdrill compare` CLI on the v0.2 development line can also compare the
+`gapdrill compare` CLI in v0.2.0 can also compare the
 artifacts from two runs. Download the same drill's report from a trusted
 base-branch run and from the pull request run into separate directories.
 
@@ -84,7 +84,7 @@ This prints a Markdown diff. A comparison can exit 0 while the head drill
 has failed operations. Inspect both the diff and the head verdict.
 
 The proposed built-in gate introduces `compare`, `comment` and `fail-on`
-inputs and a `new-findings` output. The v0.1.0 Action has six inputs and
+inputs and a `new-findings` output. The v0.2.0 Action has six inputs and
 three outputs, listed above. Before configuring the gate on another ref,
 check its root `action.yml` for those fields. Selecting a different CLI
 through `version` only replaces the binary.
@@ -94,12 +94,12 @@ through `version` only replaces the binary.
 Give each step its own `report-dir` and `artifact-name`:
 
 ```yaml
-      - uses: gapdrill/gapdrill@v0.1.0
+      - uses: gapdrill/gapdrill@v0.2.0
         with:
           drill: drills/minimal.yaml
           report-dir: minimal-report
           artifact-name: gapdrill-minimal
-      - uses: gapdrill/gapdrill@v0.1.0
+      - uses: gapdrill/gapdrill@v0.2.0
         with:
           drill: drills/full.yaml
           report-dir: full-report
@@ -110,7 +110,7 @@ Give each step its own `report-dir` and `artifact-name`:
 
 | `uses:` | What runs |
 |---|---|
-| `gapdrill/gapdrill@v0.1.0` | That release, after its signature and checksum are verified |
+| `gapdrill/gapdrill@v0.2.0` | That release, after its signature and checksum are verified |
 | `gapdrill/gapdrill@<commit SHA>` | A release at that commit, preferring a final tag. An untagged commit builds from source and needs Go 1.26 or later. |
 | A branch, or `./` in gapdrill's own repo | gapdrill built from source. Add `actions/setup-go` before it. |
 

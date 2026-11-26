@@ -52,7 +52,7 @@ need kind: it's built in.
 Download a release for Linux or macOS, on amd64 or arm64:
 
 ```sh
-VERSION=v0.1.0
+VERSION=v0.2.0
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 curl -fsSLO "https://github.com/gapdrill/gapdrill/releases/download/${VERSION}/gapdrill_${VERSION#v}_${OS}_${ARCH}.tar.gz"
@@ -82,9 +82,7 @@ It installs the release, runs every CronJob once (including CronJobs the
 release creates at runtime) and runs the chart's tests if it has any. Add
 `--values`, `--set`, `--name` or `--namespace` as you would with Helm.
 
-Learn mode and `gapdrill compare` are available in source builds after
-v0.1.0. To try them from this checkout, run `make build` and use
-`bin/gapdrill`.
+Learn mode and `gapdrill compare` require v0.2.0 or later.
 
 Not sure what belongs in the bundle? A learn run lets the nodes pull images
 the bundle lacks from their registries (the pods stay offline), then writes
@@ -137,7 +135,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: gapdrill/gapdrill@v0.1.0
+      - uses: gapdrill/gapdrill@v0.2.0
         with:
           drill: gapdrill.yaml
 ```

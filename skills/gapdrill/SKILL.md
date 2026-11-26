@@ -31,11 +31,11 @@ host; only the cluster is offline.
 ## Before you run
 
 1. Check the tools: `gapdrill version`, `docker info`, `helm version --short`.
-   If gapdrill is missing, install v0.1.0 for a strict drill on Linux or
+   If gapdrill is missing, install v0.2.0 on Linux or
    macOS, on amd64 or arm64.
 
    ```sh
-   VERSION=v0.1.0
+   VERSION=v0.2.0
    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
    ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
    curl -fsSLO "https://github.com/gapdrill/gapdrill/releases/download/${VERSION}/gapdrill_${VERSION#v}_${OS}_${ARCH}.tar.gz"
@@ -49,10 +49,8 @@ host; only the cluster is offline.
    shows how to verify one.
 
    **Version check.** v0.1.0 supports strict drills and the GitHub Action.
-   Learn mode and CLI comparison are on the v0.2 development line. Check
-   `gapdrill run --help` and `gapdrill compare --help` on the installed
-   binary. To try both from the reviewed source with Go 1.26 or later, run
-   `go install github.com/gapdrill/gapdrill/cmd/gapdrill@814117dbc8d8`.
+   Learn mode and CLI comparison require v0.2.0 or later. Check
+   `gapdrill run --help` and `gapdrill compare --help` on the installed binary.
 2. **Budget the time.** A drill takes minutes: the demo takes about three,
    mostly creating the cluster. `--timeout` (default `30m`) bounds the whole
    drill. Give the command a timeout longer than that, or run it in the

@@ -1,0 +1,2 @@
+# The previous chart's test image. The candidate's migration needs busybox:1.37.0.
+docker.io/library/busybox:1.36.1

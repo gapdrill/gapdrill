@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-read-v1
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  volumes:
+    - name: state
+      configMap:
+        name: {{ .Release.Name }}-state
+  containers:
+    - name: reader
+      image: docker.io/library/busybox:1.36.1
+      imagePullPolicy: Always
+      command: ["sh", "-ec", 'test "$(cat /state/schema)" = v1 && echo "read restored schema v1"']
+      volumeMounts:
+        - name: state
+          mountPath: /state
+          readOnly: true

@@ -1,0 +1,4 @@
+apiVersion: v2
+name: ledger
+description: The candidate revision with an upgrade-only migration.
+version: 2.0.0

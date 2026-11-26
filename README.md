@@ -164,8 +164,9 @@ gapdrill compare main-report/report.json gapdrill-report/report.json
 ```
 
 prints the findings that are new or fixed since the base run, as Markdown for a
-pull request comment. It exits 1 only when something new broke, so a pull
-request that leaves an existing problem alone can still pass. Findings match by
+pull request comment. It exits 0 for no new findings, 1 for new findings,
+2 when a drill could not run, and 3 for invalid input such as an incomplete
+report. Check the head drill's verdict for its operation results. Findings match by
 their `id`, which depends on what they're about and the workload behind them,
 not on pod names or times.
 

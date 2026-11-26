@@ -276,7 +276,8 @@ so there's nothing to compare; 3 invalid input.`,
 	}
 }
 
-// readReport loads a report.json, refusing other report formats.
+// readReport checks that the report describes a run before using it as
+// evidence that findings appeared or disappeared.
 func readReport(path string) (*report.Report, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -288,6 +289,26 @@ func readReport(path string) (*report.Report, error) {
 	}
 	if r.SchemaVersion != report.SchemaVersion {
 		return nil, fmt.Errorf("%s: unsupported report schema %q, want %q", path, r.SchemaVersion, report.SchemaVersion)
+	}
+	switch r.Verdict {
+	case report.Errored:
+		return &r, nil // setup can fail before the first operation
+	case report.Passed, report.Failed:
+	default:
+		return nil, fmt.Errorf("%s: invalid report verdict %q, want passed, failed or error", path, r.Verdict)
+	}
+	if len(r.Operations) == 0 {
+		return nil, fmt.Errorf("%s: a %s report must contain operations", path, r.Verdict)
+	}
+	for i, op := range r.Operations {
+		switch op.Status {
+		case report.StatusPassed, report.StatusFailed, report.StatusSkipped:
+		default:
+			return nil, fmt.Errorf("%s: invalid operations[%d].status %q", path, i, op.Status)
+		}
+	}
+	if (r.FailedCount() > 0) != (r.Verdict == report.Failed) {
+		return nil, fmt.Errorf("%s: verdict %q disagrees with the operation results", path, r.Verdict)
 	}
 	return &r, nil
 }

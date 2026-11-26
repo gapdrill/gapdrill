@@ -120,3 +120,37 @@ func TestCompareExitCodes(t *testing.T) {
 		t.Errorf("another schema: exit %d\n%s", code, stderr)
 	}
 }
+
+func TestCompareRequiresCompletedOperationResults(t *testing.T) {
+	t.Chdir(t.TempDir())
+	// A drill with only skipped operations can still have a passing verdict.
+	writeReport(t, "valid.json", &report.Report{
+		Drill: "demo", Verdict: report.Passed,
+		Operations: []report.Operation{{Name: "chart-tests", Status: report.StatusSkipped}},
+	})
+	if code, _, stderr := execute(t, "compare", "valid.json", "valid.json"); code != runner.ExitPassed {
+		t.Fatalf("skipped operations: exit %d, %q", code, stderr)
+	}
+	for _, tc := range []struct {
+		name, fields, want string
+	}{
+		{"missing verdict", "", "verdict"},
+		{"unknown verdict", `,"verdict":"finished"`, "verdict"},
+		{"missing operations", `,"verdict":"passed"`, "operations"},
+		{"empty operations", `,"verdict":"failed","operations":[]`, "operations"},
+		{"unknown status", `,"verdict":"passed","operations":[{"status":"pending"}]`, "operations[0].status"},
+		{"missing status", `,"verdict":"passed","operations":[{}]`, "operations[0].status"},
+		{"failure marked passed", `,"verdict":"passed","operations":[{"status":"failed"}]`, "verdict"},
+		{"failed without a failed operation", `,"verdict":"failed","operations":[{"status":"passed"}]`, "verdict"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writeFile(t, "bad.json", `{"schemaVersion":"`+report.SchemaVersion+`"`+tc.fields+`}`)
+			for _, args := range [][]string{{"compare", "bad.json", "valid.json"}, {"compare", "valid.json", "bad.json"}} {
+				code, stdout, stderr := execute(t, args...)
+				if code != runner.ExitUsage || stdout != "" || !strings.Contains(stderr, "bad.json") || !strings.Contains(stderr, tc.want) {
+					t.Errorf("%v: exit %d, stdout %q, stderr %q", args, code, stdout, stderr)
+				}
+			}
+		})
+	}
+}
